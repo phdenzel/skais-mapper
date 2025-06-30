@@ -8,7 +8,8 @@ dynamic = ["version"]
 description = "skais-mapper: a framework for generating deep-learning SKA radio telescope & cosmological hydrodynamical simulation data"
 readme = {file = "README.org", content-type = "text/plain"}
 requires-python = ">=3.6"
-license = {file = "LICENSE"}
+license = "GPL-3.0-or-later"
+license-files = ["LICEN[CS]E*"]
 authors = [
   {name = "Philipp Denzel", email = "phdenzel@gmail.com"},
 ]
@@ -18,7 +19,6 @@ maintainers = [
 keywords = ["cosmological simulations", "illustris-tng", "radio mocks"]
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
     "Operating System :: POSIX :: Linux",
     "Operating System :: MacOS",
     "Topic :: Security"]
@@ -36,6 +36,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "jupyter>=1.1.1",
+    "pytest>=7.0.1",
 ]
 
 [project.urls]
@@ -46,11 +47,11 @@ Issues = "https://github.com/phdenzel/skais-mapper/issues"
 [project.scripts]
 skais-mapper = "skais_mapper.__main__:main"
 
+[tool.setuptools.dynamic]
+version = {attr = "skais_mapper.__about__.__version__"}
+
 [tool.setuptools.packages.find]
 exclude = ["notebooks", "scripts", "results"]
-
-#[tool.setuptools.package-data]
-#data = ["*.hdf5"]
 
 
 # Linting, flaking, etc.

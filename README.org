@@ -1,0 +1,74 @@
+#+AUTHOR: phdenzel
+#+TITLE: skais-mapper
+#+DATE: 2022-09-06 Tue
+#+OPTIONS: author:nil title:t date:nil timestamp:nil toc:nil num:nil \n:nil
+
+~skais-mapper~ is a tool for generating and pre-processing hydrodynamics simulation
+(image) data for state-of-the-art generative AI models.
+
+
+** Requirements
+
+~skais-mapper~ is mostly built on python, but also includes some C extensions
+for the compute-intensive raytracing (building and visualizing datasets).
+Building from scratch thus requires ~cython~, however ~skais~ ships with
+pre-compiled C files, making the minimal requirements
+
+- ~python >= 3.6~
+- ~gcc~ (on linux) / ~clang~ (on macOS)
+
+Also see ~pyproject.toml~ for the relevant python packages.
+
+
+** Install
+
+It is recommended to install ~skais-mapper~ in a virtual environment via ~uv~. For
+this, run
+
+#+begin_src shell
+  uv sync
+#+end_src
+
+Alternatively, you can simply run
+
+#+begin_src shell
+  python setup.py build_ext --inplace
+  pip install [-e] .
+#+end_src
+
+If you want to compile the C extension from the cython files directly,
+run in advance to the above
+
+#+begin_src shell
+  python setup.py build_c [-a]
+#+end_src 
+
+
+*** On Nix(OS)
+
+For Nix(OS) users, the repository includes a ~flake.nix~ file. It
+allows to create a development environment compatible with standard
+~uv~ use.
+
+
+** Usage
+
+~skais-mapper~ implements a few commands for generating and
+manipulating simulation data.
+Use:
+- ~skais-mapper generate -h~
+
+
+** Data
+
+Currently, this framework is fully compatible with SPH data from the
+AREPO simulator, in particular the [[https://www.tng-project.org/data/][IllustrisTNG suite]].  It provides
+utility routines to fetch isolated halos from simulations snapshots
+and various raytracing algorithms for 2D column density projections of
+these halos and its galaxies.  The framework generates HDF5 files with
+image datasets of various galactic properties, such as dark matter,
+star, or gas column density distributions.
+
+- ~skais-mapper/generate_maps.py~ - generates HDF5 datasets
+- ~skais-mapper/merge_hdf5.py~ - merges fragmented HDF5 datasets
+- ~skais-mapper/replot_hdf5.py~ - plots images from HDF5 datasets
