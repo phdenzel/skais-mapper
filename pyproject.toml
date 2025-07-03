@@ -7,7 +7,7 @@ name = "skais-mapper"
 dynamic = ["version"]
 description = "skais-mapper: a framework for generating deep-learning SKA radio telescope & cosmological hydrodynamical simulation data"
 readme = {file = "README.org", content-type = "text/plain"}
-requires-python = ">=3.6"
+requires-python = ">=3.10"
 license = "GPL-3.0-or-later"
 license-files = ["LICEN[CS]E*"]
 authors = [
@@ -31,6 +31,7 @@ dependencies = [
     "h5py",
     "Pillow",
     "matplotlib",
+    "chuchichaestli>=0.2.8",
 ]
 
 [dependency-groups]
