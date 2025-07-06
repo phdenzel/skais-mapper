@@ -1,5 +1,5 @@
 """
-skais_mapper.utils.primes module: Helper functions for computing primes.
+skais_mapper.utils.primes module: Functions for testing and computing primes.
 
 @author: phdenzel
 """
@@ -13,36 +13,38 @@ def _legendre(a: int, m: int) -> int:
     Returns:
         (int): If a is a non-residue, m-1 instead of -1
     """
-    return pow(a, (m-1) >> 1, m)
+    return pow(a, (m - 1) >> 1, m)
+
 
 def _is_sprp(n: int, b: int = 2) -> bool:
     """Strong probable prime."""
-    d = n-1
+    d = n - 1
     s = 0
-    while d&1 == 0:
+    while d & 1 == 0:
         s += 1
         d >>= 1
 
     x = pow(b, d, n)
-    if x == 1 or x == n-1:
+    if x == 1 or x == n - 1:
         return True
 
     for r in range(1, s):
         x = (x * x) % n
         if x == 1:
             return False
-        elif x == n-1:
+        elif x == n - 1:
             return True
     return False
 
+
 def _is_lucas_prp(n: int, D: int) -> bool:
     """Lucas probable prime."""
-    Q = (1-D) >> 2
+    Q = (1 - D) >> 2
 
     # n+1 = 2**r*s where s is odd
-    s = n+1
+    s = n + 1
     r = 0
-    while s&1 == 0:
+    while s & 1 == 0:
         r += 1
         s >>= 1
 
@@ -50,7 +52,7 @@ def _is_lucas_prp(n: int, D: int) -> bool:
     # e.g. 19 (10011) <=> 25 (11001)
     t = 0
     while s > 0:
-        if s&1:
+        if s & 1:
             t += 1
             s -= 1
         else:
@@ -63,28 +65,29 @@ def _is_lucas_prp(n: int, D: int) -> bool:
     V = 2
     q = 1
     # mod_inv(2, n)
-    inv_2 = (n+1) >> 1
+    inv_2 = (n + 1) >> 1
     while t > 0:
-        if t&1 == 1:
+        if t & 1 == 1:
             # U, V of n+1
-            U, V = ((U + V) * inv_2)%n, ((D*U + V) * inv_2)%n
-            q = (q * Q)%n
+            U, V = ((U + V) * inv_2) % n, ((D * U + V) * inv_2) % n
+            q = (q * Q) % n
             t -= 1
         else:
             # U, V of n*2
-            U, V = (U * V)%n, (V * V - 2 * q)%n
-            q = (q * q)%n
+            U, V = (U * V) % n, (V * V - 2 * q) % n
+            q = (q * q) % n
             t >>= 1
 
     # double s until we have the 2**r*sth Lucas number
     while r > 0:
-        U, V = (U * V)%n, (V * V - 2 * q)%n
-        q = (q * q)%n
+        U, V = (U * V) % n, (V * V - 2 * q) % n
+        q = (q * q) % n
         r -= 1
 
     # primality check
     # if n is prime, n divides the n+1st Lucas number, given the assumptions
     return U == 0
+
 
 # primes less than 212
 SMALL_PRIMES = set(
@@ -243,6 +246,7 @@ SIEVE_OFFSETS = [
     2,
 ]
 
+
 def is_prime(n: int) -> bool:
     """An almost certain primality check."""
     if n < 212:
@@ -255,10 +259,10 @@ def is_prime(n: int) -> bool:
     # if n is a 32-bit integer (max. int is 2147483647), perform full trial division
     if n <= 2147483647:
         i = 211
-        while i*i < n:
+        while i * i < n:
             for o in SIEVE_OFFSETS:
                 i += o
-                if n%i == 0:
+                if n % i == 0:
                     return False
         return True
 
@@ -268,10 +272,11 @@ def is_prime(n: int) -> bool:
         return False
     a = 5
     s = 2
-    while _legendre(a, n) != n-1:
+    while _legendre(a, n) != n - 1:
         s = -s
-        a = s-a
+        a = s - a
     return _is_lucas_prp(n, a)
+
 
 # next prime strictly larger than n
 def next_prime(n: int) -> int:
@@ -287,7 +292,7 @@ def next_prime(n: int) -> int:
         n += 2
 
     # find our position in the sieve rotation via binary search
-    x = int(n%210)
+    x = int(n % 210)
     s = 0
     e = 47
     m = 24
@@ -301,7 +306,7 @@ def next_prime(n: int) -> int:
 
     i = int(n + (SIEVE_INDICES[m] - x))
     # adjust offsets
-    offs = SIEVE_OFFSETS[m:]+SIEVE_OFFSETS[:m]
+    offs = SIEVE_OFFSETS[m:] + SIEVE_OFFSETS[:m]
     while True:
         for o in offs:
             if is_prime(i):

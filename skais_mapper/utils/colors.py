@@ -18,15 +18,14 @@ cmap_t = type[Colormap]
 
 
 def color_variant(hex_color: str, shift: int = 10) -> str:
-    """
-    Takes a color in hex code and produces a lighter or darker variant depending on the shift
+    """Takes a color in hex code and produces a lighter or darker shift variant.
 
     Args:
-      hex_color (str): formatted as '#' + rgb hex string of length 6
-      shift (int): decimal shift of the rgb hex string
+        hex_color (str): formatted as '#' + rgb hex string of length 6
+        shift (int): decimal shift of the rgb hex string
 
     Returns:
-      variant (str): formatted as '#' + rgb hex string of length 6
+        variant (str): formatted as '#' + rgb hex string of length 6
     """
     if len(hex_color) != 7:
         message = "Passed {} to color_variant(), needs to be in hex format."
@@ -40,9 +39,7 @@ def color_variant(hex_color: str, shift: int = 10) -> str:
 
 
 class ReNormColormapAdaptor(Colormap):
-    """
-    Colormap adaptor that uses another Normalize instance than applied to the mappable
-    """
+    """Adaptor for re-normalizing color mappable."""
 
     def __init__(self, base, cmap_norm, orig_norm=None):
         if orig_norm is None:
@@ -60,32 +57,22 @@ class ReNormColormapAdaptor(Colormap):
         self._orig_norm = orig_norm
 
     def __call__(self, X, **kwargs):
-        """
-        Re-normalise the values before applying the colormap
-        """
+        """Re-normalise the values before applying the colormap."""
         return self._base(self._cmap_norm(self._orig_norm.inverse(X)), **kwargs)
 
     def __getattr__(self, attr):
-        """
-        Any other attribute, we simply dispatch to the underlying cmap
-        """
+        """Any other attribute, we simply dispatch to the underlying cmap."""
         return getattr(self._base, attr)
 
     def _init(self, *args, **kwargs):
-        """
-        Abstract dummy method
-        """
+        """Abstract dummy method."""
 
     def reversed(self, *args, **kwargs):
-        """
-        Abstract dummy method
-        """
+        """Abstract dummy method."""
 
 
 class SkaisColors:
-    """
-    An assortment of colors and palettes
-    """
+    """An assortment of colors and palettes."""
 
     # Shades
     white = "#DDDEE1"  # rba(221, 222, 225)
@@ -238,18 +225,16 @@ class SkaisColors:
     def cmap_from_color(
         cls,
         color_str: str,
-        secondary_color: str = None,
-        N: int = None,
+        secondary_color: str | None = None,
     ) -> lscmap_t:
-        """
-        Create a colormap from a single color
+        """Create a colormap from a single color.
 
         Args:
-          color_str (str): color string of the class color
-          secondary_color (str): color into which the color changes in the colormap
+            color_str: color string of the class color
+            secondary_color: color into which the color changes in the colormap
 
         Returns:
-          (mpl.colors.LinearSegmentedColormap object): reversed colormap
+            (mpl.colors.LinearSegmentedColormap object): reversed colormap
         """
         if secondary_color is None:
             secondary_color = color_variant(color_str, shift=125)
@@ -257,16 +242,12 @@ class SkaisColors:
             color = cls.__dict__[color_str]
         else:
             color = color_str
-        if N is None:
-            N = 1024
         cmap = LinearSegmentedColormap.from_list("Skais" + color_str, [secondary_color, color])
         return cmap
 
 
 class SkaisColorMaps:
-    """
-    An assortment of linearly interpolated colormaps based on 4 colors each
-    """
+    """An assortment of linearly interpolated colormaps based on 4+ colors each."""
 
     for k, p in SkaisColors.palettes.items():
         locals()[k] = LinearSegmentedColormap.from_list(k, p)
@@ -280,21 +261,19 @@ class SkaisColorMaps:
 
     @classmethod
     def random(cls) -> lscmap_t:
-        """
-        Choose a random color map
+        """Choose a random color map.
 
         Returns:
-          cmap (mpl.colors.LinearSegmentedColormap object): random colormap from custom list
+            cmap: random colormap from custom list
         """
         return random.choice(cls.aslist)
 
     @classmethod
     def gen(cls):
-        """
-        Generate colormaps
+        """Generate colormaps.
 
         Returns:
-          (mpl.colors.LinearSegmentedColormap object): colormap generated from custom list
+            (mpl.colors.LinearSegmentedColormap object): colormap generated from custom list
         """
         for cmap in cls.aslist:
             yield cmap
@@ -303,17 +282,16 @@ class SkaisColorMaps:
     def reverse(
         cls, cmap: cmap_t, set_bad: str = None, set_under: str = None, set_over: str = None
     ) -> lscmap_t:
-        """
-        Reverse the specified colormap
+        """Reverse the specified colormap.
 
         Args:
-          cmap (mpl.colors.LinearSegmentedColormap object): colormap to be reversed
-          set_bad (str): set colormaps bad values to a different color
-          set_under (str): set colormaps under values to a different color
-          set_over (str): set colormaps over values to a different color
+            cmap (mpl.colors.LinearSegmentedColormap object): colormap to be reversed
+            set_bad (str): set colormaps bad values to a different color
+            set_under (str): set colormaps under values to a different color
+            set_over (str): set colormaps over values to a different color
 
         Returns:
-          (mpl.colors.LinearSegmentedColormap object): reversed colormap
+            (mpl.colors.LinearSegmentedColormap object): reversed colormap
         """
         reverse = []
         k = []
@@ -340,12 +318,11 @@ class SkaisColorMaps:
 
     @classmethod
     def palette(cls, cmap_name: str, N: int):
-        """
-        Return a palette of a colormap with N linearly interpolated color points
+        """Return a palette of a colormap with N linearly interpolated color points.
 
         Args:
-          cmap_name (str): name of the colormap
-          N (int): number of colors in the palette
+            cmap_name: name of the colormap
+            N: number of colors in the palette
         """
         vals = np.linspace(0, 1, N)
         cmap = cls.__dict__[cmap_name]
@@ -354,14 +331,10 @@ class SkaisColorMaps:
 
     @classmethod
     def plot_gradients(cls, savefig: bool = False):
-        """
-        Plot all color-map gradients
+        """Plot all color-map gradients.
 
         Args:
-          savefig (bool): save figure as palettes.png
-
-        Returns:
-          None
+            savefig (bool): save figure as palettes.png
         """
         gradient = np.linspace(0, 1, 256)
         gradient = np.vstack((gradient, gradient))
@@ -380,11 +353,10 @@ class SkaisColorMaps:
 
     @staticmethod
     def register_all(verbose: bool = False):
-        """
-        Register colormaps with matplotlib
+        """Register colormaps with matplotlib.
 
         Args:
-          verbose (bool): If True, print information to command line
+            verbose (bool): If True, print information to command line
         """
         for g in SkaisColorMaps.aslist:
             if verbose:

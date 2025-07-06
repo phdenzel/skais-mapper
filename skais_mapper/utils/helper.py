@@ -28,15 +28,16 @@ def current_time(
             t = t.replace("-", "")
     return t
 
+
 def compress_encode(string: str) -> str:
     """Compress and encode a string for shorter representations.
 
     Args:
         string: String to be encoded.
     """
-    compressed_data = lzma.compress(string.encode('utf-8'))
+    compressed_data = lzma.compress(string.encode("utf-8"))
     encoded_data = base64.b64encode(compressed_data)
-    return encoded_data.decode('utf-8')
+    return encoded_data.decode("utf-8")
 
 
 def extract_decode(string: str) -> str:
@@ -47,4 +48,4 @@ def extract_decode(string: str) -> str:
     """
     compressed_data = base64.b64decode(string)
     original_data = lzma.decompress(compressed_data)
-    return original_data.decode('utf-8')
+    return original_data.decode("utf-8")
