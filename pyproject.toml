@@ -31,6 +31,7 @@ dependencies = [
     "h5py",
     "Pillow",
     "matplotlib",
+    "gitpython>=3.1.44",
     "chuchichaestli>=0.2.8",
 ]
 

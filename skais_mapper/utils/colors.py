@@ -263,9 +263,6 @@ class SkaisColors:
         return cmap
 
 
-# #############################################################################
-# Color maps
-# #############################################################################
 class SkaisColorMaps:
     """
     An assortment of linearly interpolated colormaps based on 4 colors each
