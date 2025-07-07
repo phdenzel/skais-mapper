@@ -13,7 +13,6 @@ from skais_mapper.utils.helper import (
 from skais_mapper.utils.config import (
     get_run_id,
     set_run_id,
-    parse_args,
     save_config,
     print_config,
     load_config,
@@ -29,7 +28,6 @@ __all__ = [
     "extract_decode",
     "get_run_id",
     "set_run_id",
-    "parse_args",
     "save_config",
     "print_config",
     "load_config",

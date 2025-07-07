@@ -12,6 +12,7 @@ import skais_mapper.raytrace
 import skais_mapper.illustris
 import skais_mapper.simobjects
 import skais_mapper.utils
+from skais_mapper.__main__ import parse_args
 
 
 RUN_UID = uuid.uuid4()
