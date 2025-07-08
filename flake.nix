@@ -19,6 +19,7 @@
           scipy
           cython
           h5py
+          matplotlib
           jupyter
         ]);
         pyDists = with pkgs; [

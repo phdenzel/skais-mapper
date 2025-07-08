@@ -105,6 +105,7 @@ def print_config(
             continue
         else:
             json_dict[k] = v
+    print("Configuration:")
     print(json.dumps(json_dict, indent=4))
 
 
