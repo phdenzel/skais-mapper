@@ -47,7 +47,8 @@ Repository = "https://github.com/phdenzel/skais-mapper.git"
 Issues = "https://github.com/phdenzel/skais-mapper/issues"
 
 [project.scripts]
-skais-mapper = "skais_mapper.__main__:main"
+"skais-mapper" = "skais_mapper.__main__:main"
+"skais-mapper-generate" = "skais_mapper.__main__:generate"
 
 [tool.setuptools.dynamic]
 version = {attr = "skais_mapper.__about__.__version__"}
