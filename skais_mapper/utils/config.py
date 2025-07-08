@@ -96,7 +96,7 @@ def print_config(
     if include_git_diff:
         config["git_diff"] = [compress_encode(d) for d in skais_mapper.GIT_DIFF]
     else:
-        config["git_is_dirty"] = True
+        config["git_is_dirty"] = len(skais_mapper.GIT_DIFF) > 1
     json_dict = {}
     for k, v in config.items():
         if isinstance(v, Path):
