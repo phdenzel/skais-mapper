@@ -1,0 +1,35 @@
+{
+    "config_file": "configs/tng50-1.50.2D.1000.2000.json",
+    "exclude_git_state": false,
+    "include_git_diff": false,
+    "output": "/scratch/250709_tng50-1.50.2D.{}.1000.2000.hdf5",
+    "src_dir": "/cluster/projects/ska",
+    "config_dir": ".",
+    "dry_run": false,
+    "verbose": true,
+    "simulation_type": "illustris/tng50-1",
+    "snapshots": [
+        50
+    ],
+    "num_samples": [
+        1000,
+        2000
+    ],
+    "groups": [
+        "dm",
+        "star",
+        "gas",
+        "hi",
+        "hi/21cm",
+        "temp",
+        "bfield"
+    ],
+    "grid_size": 512,
+    "retries": 100,
+    "part_max": null,
+    "part_min": 10000,
+    "subfind_limit": 11000,
+    "run_uid": "6d890207-7656-485f-8069-555661843f94",
+    "git_state": "c236bd30b8a9e71e2fde71e8b6e28f49a4ba04f6",
+    "git_is_dirty": true
+}
