@@ -107,7 +107,7 @@ def parse_args(return_parser: bool = False, **kwargs) -> dict:
     parser_generate.add_argument(
         "--retries",
         type=int,
-        default=200,
+        default=100,
         help="Number of retries (after minimum particle skips) before the job is terminated.",
     )
     parser_generate.add_argument(
@@ -419,11 +419,11 @@ def map_TNG_galaxies(
     """
     snapshots = list(snapshots)
     gids = list(range(gids)) if isinstance(gids, int) else list(gids)
-    Ng = len(gids)
-    skip_count = [0 for _ in range(Ng)]
     # list of groups to generate
     if groups is None:
         groups = ["gas"]
+    Ng = len(gids) * len(groups)
+    skip_count = [0]*(Ng//len(groups))
     # gather paths
     src_path = Path(src_dir) if src_dir is not None else Path("./simulations")
     tng_path = src_path / sim_type
@@ -504,9 +504,12 @@ def map_TNG_galaxies(
                     part_min is not None and tng_src.N_particles_type[0] < part_min
                 ):
                     if verbose:
-                        print("Skipping candidate due to low particle number...")
+                        print(
+                            "Skipping candidate due to low particle number"
+                            f" {tng_src.N_particles_type[0]}..."
+                        )
                     # add another group candidate below the limit
-                    if retries is not None and skip_count[i] >= retries:
+                    if retries is not None and skip_count[-1] >= retries:
                         Ng -= 1
                     elif subfind_limit is not None:
                         while gid in gids and gid <= subfind_limit:
@@ -516,8 +519,8 @@ def map_TNG_galaxies(
                             rotations = np.concatenate(
                                 (rotations, rotations[i][np.newaxis, ...]), axis=0
                             )
-                        skip_count.append(skip_count[i] + 1)
-                    continue
+                        skip_count.append(skip_count[-1] + 1)
+                    break
                 Ng -= 1
 
                 # construct actual hdf5 filename
