@@ -1,21 +1,28 @@
 # pylint: disable=C0103
 """
-skais_mapper.read module
+skais_mapper.simobjects module
 
 @author: phdenzel
 """
 
-import os
 import time
 from pathlib import Path
-from typing import Optional, Callable
+from typing import Optional, Callable, Any, Literal
 from numpy.typing import NDArray
 import numpy as np
 import scipy as sp
 import astropy.units as au
 import astropy.constants as ac
 import skais_mapper.illustris as tng
+import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
+from matplotlib.image import AxesImage
+from matplotlib.colors import Colormap
+import skais_mapper
+from skais_mapper.utils.colors import SkaisColorMaps
 from skais_mapper.cosmology import CosmoModel
+from skais_mapper.rotations import R
+from skais_mapper.raytrace import voronoi_RT_2D, voronoi_NGP_2D
 
 
 __all__ = ["SPHGalaxy", "TNGGalaxy", "GasolineGalaxy"]
@@ -510,12 +517,12 @@ class SPHGalaxy:
         t_ini = time.time()
         kdtree = sp.spatial.cKDTree(p, leafsize=16, boxsize=boxsize)
         if verbose:
-            print(f"Time to build KDTree: {time.time()-t_ini:.3f} secs.")
+            print(f"Time to build KDTree: {time.time() - t_ini:.3f} secs.")
         if verbose:
             print("Querying KDTree...")
         dist, _ = kdtree.query(p, k, workers=threads)
         if verbose:
-            print(f"Time to querying KDTree: {time.time()-t_ini:.3f} secs.")
+            print(f"Time to querying KDTree: {time.time() - t_ini:.3f} secs.")
         if as_float32:
             return (dist[:, -1] * au.kpc).astype(np.float32)
         return dist[:, -1] * au.kpc
@@ -667,8 +674,8 @@ class TNGGalaxy(SPHGalaxy):
         Load the FOF subhalo metadata of a specified group ID
 
         Args:
-            halo_index (int): the group ID corresponding to a subhalo ID
-            verbose (bool): Print status information to the command-line.
+            halo_index: the group ID corresponding to a subhalo ID
+            verbose: Print status information to the command-line.
 
         Returns:
             (dict): dictionary containing the FOF subhalo metadata
@@ -846,6 +853,137 @@ class TNGGalaxy(SPHGalaxy):
         hsml = 2.5 * self.r_cell  # * find_fwhm(CubicSplineKernel().kernel)
         return hsml
 
+    def get_mapping_arrays(
+        self,
+        keys: Optional[list[str]] = None,
+        factors: Optional[list[float]] = None,
+        verbose: bool = False,
+    ) -> list:
+        """
+        Fetch data (arrays or scalars) from a TNGGalaxy object given keys.
+
+        Args:
+            keys: Keys to fetch data.
+            factors: Factors for modifying the fetched data.
+            verbose: If True, print status updates to command line.
+
+        Returns:
+            (list): List of fetched data arrays or scalars.
+        """
+        if keys is None:
+            keys = ["particle_positions", "masses", "radii"]
+        if factors is None:
+            factors = [1, 1, 3]
+        vals = []
+        for key, f in zip(keys, factors):
+            if isinstance(key, (tuple, list)):
+                try:
+                    v1 = getattr(self, key[0])
+                except Exception:
+                    v1 = self.subhalo[key[0]]
+                try:
+                    v2 = getattr(self, key[1])
+                except Exception:
+                    v2 = self.subhalo[key[1]]
+                v = v1 * v2 * f
+            else:
+                try:
+                    v = getattr(self, key) * f
+                except Exception:
+                    v = self.subhalo[key] * f
+            vals.append(v)
+        if verbose:
+            print(f"Loading arrays: {keys}...")
+        return [*vals]
+
+    def generate_map(
+        self,
+        keys: Optional[list[str]] = None,
+        factors: Optional[list[float]] = None,
+        use_half_mass_rad: bool = True,
+        fh: float = 3,
+        grid_size: int = 512,
+        xaxis: int = 0,
+        yaxis: int = 1,
+        periodic: bool = True,
+        assignment_func: Callable = voronoi_RT_2D,
+        tracers: Optional[int] = None,
+        divisions: Optional[int] = None,
+        rot: list[int] | list[float] | None = None,
+        verbose: bool = False,
+    ) -> tuple[au.Quantity, au.Quantity, int] | Any:
+        """
+        Generate raytracing projection map.
+
+        Args:
+            keys: Keys to fetch data for projecting onto the map.
+            factors: Factors for modifying the projection data.
+            use_half_mass_rad:
+              If True, the SubhaloHalfmassRad from the subfind catalog is used for
+              selecting relevant particles. Otherwise, a fraction of the entire
+              particle extent is used.
+            fh: Expansion factor for the SPH particle radii.
+            grid_size: The size of the maps/images. Default: 512.
+            xaxis: Projection axis for x.
+            yaxis: Projection axis for y.
+            periodic: Use periodic boundary conditions for the projection.
+            assignment_func: Mass assignment algorithm; one of
+              [voronoi_RT_2D, voronoi_NGP_2D].
+            tracers: Number of tracer particles to use for the Nearest Grid Point algorithm.
+            divisions: Number of sphere divisions to use for the Nearest Grid Point algorithm.
+            rot:
+              Angles to rotate the particle positions.
+            verbose: If True, print status updates to command line.
+
+        Returns:
+            (np.ndarray, np.ndarray, int): The projected map, the map extent, and
+               number of particles projected.
+        """
+        L, M, T = au.Mpc, au.Msun, au.K
+        projected = np.zeros((grid_size, grid_size), dtype=np.float64)
+        if keys is None:
+            keys = ["particle_positions", "masses", "radii", "center"]
+        if factors is None:
+            factors = [1, 1, fh, 1]
+        if use_half_mass_rad:
+            if "SubhaloHalfmassRadType" not in keys:
+                keys += ["SubhaloHalfmassRadType"]
+                factors += [self.units("l/h")]
+            else:
+                factors.insert(keys.index("SubhaloHalfmassRadType"), self.units("l/h"))
+        if assignment_func not in [voronoi_RT_2D, voronoi_NGP_2D]:
+            raise ValueError(
+                f"Assignment function `{assignment_func.__name__}` not compatible."
+            )
+        uarrs = self.get_mapping_arrays(keys=keys, factors=factors, verbose=verbose)
+        if rot is not None:
+            rot_op = R.y(rot[1]) * R.x(rot[0])
+            uarrs[0] = rot_op(uarrs[0]).astype(np.float32)
+            uarrs[3] = rot_op(uarrs[3]).astype(np.float32)
+        # Ngids = uarrs[0].shape[0]
+        hmr = uarrs[4][0] if use_half_mass_rad else None  # always use gas (p_idx=0) hmr
+        # hmr = (uarrs[4][obj.p_idx] if use_half_mass_rad else None)
+        idcs, limits = indices_within_box(uarrs[0], uarrs[3], radius=hmr, verbose=verbose)
+        hmr2 = limits[3] - limits[0]
+        args = strip_ap_units(*uarrs[:3], *limits[:2], hmr2, mask=idcs, units=[L, M, T * M])
+        if tracers is not None:
+            args.append(tracers)
+        else:
+            args.append(xaxis)
+        if divisions is not None:
+            args.append(divisions)
+        else:
+            args.append(yaxis)
+        if verbose:
+            print(f"Raytracing particles with `{assignment_func.__name__}`...")
+        try:
+            assignment_func(projected, *args, periodic, verbose=True)
+        except Exception as e:
+            print(e)
+            return projected * uarrs[1].unit / L**2
+        projected = projected * uarrs[1].unit / L**2
+        return projected, hmr2 / 2 * np.array([-1, 1, -1, 1]), idcs.shape[0]
+
 
 class ArepoGalaxy(TNGGalaxy):
     """
@@ -882,55 +1020,208 @@ class GasolineGalaxy(SPHGalaxy):
 #         )
 #
 #
-# def dummy_boxsize(s: GasolineGalaxy, q: float = 1, scale: bool = True, length: float = None):
-#     """
-#     Add a dummy boxsize if none is defined
-#
-#     Args:
-#       s (SPHGalaxy): A galaxy with positions to calculate the box boundary limits
-#       q (float): Scaling factor to multiply the boxsize
-#       scale (bool): Convert box length into physical units by correcting the Hubble flow
-#       length (float): Optional: manually chosen length for the box size
-#     """
-#     if length is None:
-#         pos = s["pos"].in_units("kpc").view(np.ndarray)
-#         imax = np.argmax(pos, axis=0)
-#         imin = np.argmin(pos, axis=0)
-#         max_length = np.max(pos[imax])
-#         min_length = np.min(pos[imin])
-#         length = 2 * max([max_length, np.abs(min_length)])
-#     ustr = str(s["pos"].units)
-#     if scale and "a" in s.properties:
-#         length /= s.properties["a"]
-#         ustr = " ".join([ustr, "a"])
-#     if scale and "h" in s.properties:
-#         length *= s.properties["h"]
-#         ustr = " ".join([ustr, "h**-1"])
-#     # length = pb.array.SimArray(length, ustr, dtype=s["pos"].dtype)
-#     length = q * length  # * pb.units.Unit(ustr)
-#     s.properties["boxsize"] = length
+
+
+def indices_within_box(
+    pos: np.ndarray | au.Quantity,
+    center: list | np.ndarray | au.Quantity,
+    radius: float | au.Quantity = None,
+    fraction: float = 1.0,
+    verbose: bool = False,
+) -> tuple[au.Quantity, list[au.Quantity]]:
+    """
+    Get particle indices within a box of given radius from the centre, e.g. half-mass radius.
+
+    Args:
+        pos: Particle positions to be filtered.
+        center: Center position of the cube.
+        radius: Radius, i.e. half-side of the cube.
+        fraction: Box fraction for the default radius if not given.
+        verbose: If True, print status updates to command line.
+
+    Returns:
+        (au.Quantity, list[au.Quantity]):
+          Indices of the filtered particle positions and their 3D extent.
+    """
+    pos_extent = (
+        pos[:, 0].max() - pos[:, 0].min(),
+        pos[:, 1].max() - pos[:, 1].min(),
+        pos[:, 2].max() - pos[:, 2].min(),
+    )
+    w = max(pos_extent)
+    if verbose:
+        print(f"Box extent:  {pos_extent[0]}   {pos_extent[1]}   {pos_extent[2]}")
+    if radius is None:
+        radius = 0.25 * fraction * w
+    else:
+        radius *= fraction
+    if verbose:
+        print(f"Radius: {radius}")
+    xmin, xmax = center[0] - radius, center[0] + radius
+    ymin, ymax = center[1] - radius, center[1] + radius
+    zmin, zmax = center[2] - radius, center[2] + radius
+    if verbose:
+        print(f"Extent: {xmax - xmin}   {ymax - ymin}   {zmax - zmin}")
+    indices = np.where(
+        (pos[:, 0] > xmin)
+        & (pos[:, 0] < xmax)
+        & (pos[:, 1] > ymin)
+        & (pos[:, 1] < ymax)
+        & (pos[:, 2] > zmin)
+        & (pos[:, 2] < zmax)
+    )[0]
+    if verbose:
+        print(f"Selected particles: {indices.shape[0]:,} / {pos.shape[0]:,}")
+    return indices, [xmin, ymin, zmin, xmax, ymax, zmax]
+
+
+def strip_ap_units(
+    *args,
+    mask: Optional[list] = None,
+    units: Optional[list[au.Unit]] = None,
+    dtype: Any = np.float32,
+) -> list:
+    """
+    Remove astropy units from data arrays or scalars.
+
+    Args:
+        args: Data arrays or scalars with astropy units.
+        mask: Mask for the data arrays.
+        units: Astropy units to be stripped.
+        dtype: Data type of the stripped data array.
+
+    Returns:
+        (list[np.ndarray]): Of astropy units stripped data arrays or scalars.
+    """
+    arg_ls = list(args)
+    for i, arg in enumerate(arg_ls):
+        if units is not None:
+            for u in units:
+                if arg_ls[i].unit.is_equivalent(u):
+                    arg_ls[i] = arg_ls[i].to(u)
+        arg_ls[i] = arg_ls[i].value
+        if isinstance(arg_ls[i], np.ndarray):
+            if mask is not None:
+                arg_ls[i] = arg_ls[i][mask].astype(dtype)
+    return arg_ls
+
+
+def plot_map(
+    projected_map: np.ndarray | au.Quantity,
+    extent: np.ndarray | au.Quantity,
+    group: str = "",
+    cmap: Optional[Colormap] = getattr(SkaisColorMaps, "gaseous"),
+    interpolation: str = "bicubic",
+    origin: Literal["upper", "lower"] | None = "lower",
+    out_path: Optional[str | Path] = None,
+    subdir_save: bool = False,
+    basename: Optional[str] = None,
+    cbar_label: str = "",
+    no_log: bool = False,
+    label: bool = True,
+    colorbar: bool = True,
+    savefig: bool = False,
+    show: bool = True,
+    verbose: bool = False,
+) -> AxesImage:
+    r"""
+    Plot the map data with specific defaults suitable for projected maps.
+
+    Args:
+        projected_map: Image map data.
+        extent: Image map extent.
+        group: Galaxy property of the map, e.g. star, gas, or dm.
+        cmap: Colormap for map plot.
+        interpolation: Alternative default for matplotlib.pyplot.imshow.
+        origin: Alternative default for matplotlib.pyplot.imshow.
+        out_path: The root in which the plot is saved.
+        subdir_save: If True, saves in subdirectories `{group}/png`
+        basename: Basname of the file to which the plot is written.
+        cbar_label: The colorbar label. Default: log $\Sigma$
+        no_log: If True, plot the data in linear scale.
+        label: If True, include the x and y axis labels in the plot.
+        colorbar: If True, include the colorbar in the plot.
+        savefig: If True, save the plot to file.
+        show: If True, show the plot.
+        verbose: If True, print status updates to command line.
+
+    Returns:
+        (matplotlib.image.AxesImage): Matplotlib image instance.
+    """
+    if hasattr(projected_map, "value"):
+        projected = projected_map.value
+    else:
+        projected = projected_map
+    if hasattr(extent, "value"):
+        ext = extent.value
+    else:
+        ext = extent
+    if hasattr(projected_map, "unit") and projected_map.unit:
+        uprojected = f"[{projected_map.unit}]"
+    else:
+        uprojected = ""
+    if hasattr(extent, "unit") and extent.unit:
+        uext = f"[{extent.unit}]"
+    else:
+        uext = ""
+    plt.figure(dpi=100)
+    if no_log:
+        img = plt.imshow(
+            projected, cmap=cmap, extent=ext, interpolation=interpolation, origin=origin
+        )
+    else:
+        img = plt.imshow(
+            np.log10(projected),
+            cmap=cmap,
+            extent=ext,
+            interpolation=interpolation,
+            origin=origin,
+        )
+    if label:
+        plt.xlabel(f"x {uext}")
+        plt.ylabel(f"y {uext}")
+    if colorbar:
+        lbl = cbar_label
+        if cbar_label is None:
+            lbl = "log " + "\u03a3 " + uprojected
+        if "[" not in lbl or "]" not in lbl:
+            lbl = cbar_label + uprojected
+        lbl = lbl.replace("solMass", "M" + r"$_{\odot}$").replace("2", "\u00b2")
+        eformat = ticker.ScalarFormatter()
+        eformat.set_powerlimits((-2, 2))
+        plt.colorbar(label=lbl, format=eformat)
+    if savefig:
+        if basename is None:
+            basename = f"{skais_mapper.utils.get_run_id()}_image"
+        if out_path is None:
+            out_path = Path("./")
+        out_path = Path(out_path)
+        if subdir_save:
+            out_path = out_path / group / "png"
+        if not out_path.exists():
+            out_path.mkdir(parents=True)
+        filename = out_path / (basename + ".png")
+        plt.savefig(filename, transparent=True, bbox_inches="tight")
+        if verbose:
+            print(f"Saving to [png]: {filename}")
+    if show:
+        plt.show()
+    else:
+        plt.close()
+    return img
 
 
 if __name__ == "__main__":
     import pprint
 
-    gasoline2_path = "/data/procomp/gasoline2"
-    gasoline2_data = os.path.join(
-        gasoline2_path,
-        "Capelo_et_al_2018_Run01_0.4Gyr/"
-        "isogal_hr_z3_gf0.6_0.5ZSol_phot_nometal_dustcazcool_C1_UVz3_shield.05100",
-    )
-    # s = read_gasoline(gasoline2_data)
-    arepo_path = "/data/procomp/arepo"
-
     # Illustris loads
-    tng_path = "/data/procomp/illustris/tng50-1"
+    tng_path = "/scratch/data/illustris/tng50-1"
     tng_id = 99
     tng_src = TNGGalaxy(tng_path, tng_id, halo_index=10, as_float32=True)
     pprint.pprint(tng_src.header)
     pprint.pprint(tng_src.cosmology)
-    # pprint.pprint(tng_src.subhalo)
-    # pprint.pprint(tng_src.data)
+    pprint.pprint(tng_src.subhalo.keys())
+    pprint.pprint(tng_src.data.keys())
     # dists = tng_src.kd_tree(k=8, threads=4)
     # print(dists.shape, dists)
     # gal = read_illustris_galaxy(tng_path, tng_id, g_list[10], 'gas',
