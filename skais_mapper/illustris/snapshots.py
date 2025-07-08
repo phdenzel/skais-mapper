@@ -9,7 +9,7 @@ import os
 from typing import Optional
 import numpy as np
 from tqdm import trange
-from skais_mapper.illustris.util import HDF5_File, pidx_from_ptype
+from skais_mapper.illustris.util import IllustrisH5File, pidx_from_ptype
 from numpy.typing import NDArray
 import h5py
 from skais_mapper.illustris.groupcat import get_path as get_cat_path
@@ -100,7 +100,7 @@ def load_snapshot(
     elif isinstance(mdi, int):
         mdi = [mdi]
     # load header from first partition
-    HDF5_File.path_func = get_path
+    IllustrisH5File.path_func = get_path
     header = load_header(base_path, snapshot, as_dict=True)
     p_numbers = particle_numbers(header)
     # decide global read size, starting partition number and offset
@@ -152,7 +152,7 @@ def load_snapshot(
     else:
         partition_iterator = range(file_id, header["NumFilesPerSnapshot"])
     for file_id in partition_iterator:
-        f = HDF5_File(base_path, snapshot, file_id)
+        f = IllustrisH5File(base_path, snapshot, file_id)
         # if no particles of requested type in partition, update and continue
         if key not in f:
             f.close()
@@ -211,16 +211,16 @@ def snapshot_offsets(
     """
     subset = {}
     # old/new format
-    HDF5_File.path_func = get_cat_path
+    IllustrisH5File.path_func = get_cat_path
     if "fof_subhalo" in get_cat_path(base_path, snapshot):
         # use separate 'offsets_nnn.hdf5' files
-        with HDF5_File(base_path, snapshot, path_func=get_offset_path) as f:
+        with IllustrisH5File(base_path, snapshot, path_func=get_offset_path) as f:
             file_offsets = f["FileOffsets/" + gtype][()]
             # for consistency
             subset["snapOffsets"] = np.transpose(f["FileOffsets/SnapByType"][()])
     else:
         # load groupcat partition offsets from header of the first file
-        with HDF5_File(base_path, snapshot) as f:
+        with IllustrisH5File(base_path, snapshot) as f:
             file_offsets = f["Header"].attrs["FileOffsets_" + gtype]
             subset["snapOffsets"] = f["Header"].attrs["FileOffsets_Snap"]
     # get target groups partition which contains this group_id
@@ -228,14 +228,14 @@ def snapshot_offsets(
     file_id = np.max(np.where(file_offsets >= 0))
     group_offset = file_offsets[file_id]
     # load the length (by type) of this group/subgroup from the group catalog
-    with HDF5_File(base_path, snapshot, file_id) as f:
+    with IllustrisH5File(base_path, snapshot, file_id) as f:
         subset["lenType"] = f[gtype][gtype + "LenType"][group_offset, :]
     # old/new format: load the offset (by type) of this group in the snapshot
     if "fof_subhalo" in get_cat_path(base_path, snapshot):
-        with HDF5_File(base_path, snapshot, path_func=get_offset_path) as f:
+        with IllustrisH5File(base_path, snapshot, path_func=get_offset_path) as f:
             subset["offsetType"] = f[gtype + "/SnapByType"][group_id, :]
     else:
-        with HDF5_File(base_path, snapshot, file_id) as f:
+        with IllustrisH5File(base_path, snapshot, file_id) as f:
             subset["offsetType"] = f["Offsets"][gtype + "_SnapByType"][group_offset, :]
     return subset
 
@@ -311,7 +311,7 @@ def load_header(
     Returns:
         (dict): The header of the snapshot HDF5 file as a dictionary
     """
-    with HDF5_File(base_path, snapshot) as f:
+    with IllustrisH5File(base_path, snapshot) as f:
         if as_dict:
             header = dict(f["Header"].attrs.items())
         else:
@@ -334,7 +334,7 @@ def find_group_in_partitions(base_path: str, snapshot: int, key: str) -> h5py.Fi
     """
     partition = 0
     while True:
-        f = HDF5_File(base_path, snapshot, partition)
+        f = IllustrisH5File(base_path, snapshot, partition)
         if not f.exists:
             return None
         if key in f:
@@ -346,7 +346,7 @@ def find_group_in_partitions(base_path: str, snapshot: int, key: str) -> h5py.Fi
 
 if __name__ == "__main__":
     # TODO: unittest
-    HDF5_File.path_func = get_path
+    IllustrisH5File.path_func = get_path
     tng_dir = "/data/procomp/Illustris/tng50-1"
     snap_id = 50
 
@@ -359,7 +359,7 @@ if __name__ == "__main__":
 
     # test opening a HDF5 file manually
     print("# Test opening a HDF5 file manually")
-    with HDF5_File(tng_dir, snap_id) as f:
+    with IllustrisH5File(tng_dir, snap_id) as f:
         print(f, f.keys())
 
     # test loading the header of a HDF5 file

@@ -10,7 +10,7 @@ import numpy as np
 from tqdm import trange
 import h5py
 from numpy.typing import NDArray
-from skais_mapper.illustris.util import HDF5_File
+from skais_mapper.illustris.util import IllustrisH5File
 
 
 def get_path(base_path: str, snapshot: int, partition: int = 0) -> str:
@@ -82,7 +82,7 @@ def load_catalog(
     elif isinstance(fields, (str, bytes)):
         fields = [fields]
     # load header from first partition
-    HDF5_File.path_func = get_path
+    IllustrisH5File.path_func = get_path
     header = load_header(base_path, snapshot)
     group = load_group(base_path, snapshot, key)
     if f"N{key_ref}_Total" not in header and key_ref == "subgroups":
@@ -112,7 +112,7 @@ def load_catalog(
     else:
         partition_iterator = range(header["NumFiles"])
     for i in partition_iterator:
-        f = HDF5_File(base_path, snapshot, i)
+        f = IllustrisH5File(base_path, snapshot, i)
         # if partition is empty
         if not f["Header"].attrs[f"N{key_ref}_ThisFile"]:
             continue
@@ -189,7 +189,7 @@ def load_header(
     Returns:
         (dict): The header of the group catalog HDF5 file as a dictionary
     """
-    with HDF5_File(base_path, snapshot, path_func=get_path) as f:
+    with IllustrisH5File(base_path, snapshot, path_func=get_path) as f:
         if as_dict:
             header = dict(f["Header"].attrs.items())
         else:
@@ -213,7 +213,7 @@ def load_group(base_path: str, snapshot: int, key: str, as_dict: bool = False) -
 
     Note: Remember to close the HDF5 file afterwards (use <group>._id.close()).
     """
-    f = HDF5_File(base_path, snapshot, path_func=get_path)
+    f = IllustrisH5File(base_path, snapshot, path_func=get_path)
     if key in f:
         if as_dict:
             group = dict(f[key])
@@ -279,18 +279,18 @@ def load_single(base_path, snapshot, halo_id=-1, subhalo_id=-1) -> dict:
     # old or new format
     if "fof_subhalo" in get_path(base_path, snapshot):
         # use separate 'offsets_nnn.hdf5' files
-        with HDF5_File(base_path, snapshot, path_func=get_offset_path) as f:
+        with IllustrisH5File(base_path, snapshot, path_func=get_offset_path) as f:
             offsets = f["FileOffsets/" + key][()]
     else:
         # use header of group catalog
-        with HDF5_File(base_path, snapshot, path_func=get_path) as f:
+        with IllustrisH5File(base_path, snapshot, path_func=get_path) as f:
             offsets = f["Header"].attrs["FileOffsets_" + key]
     offsets = group_id - offsets
     file_id = np.max(np.where(offsets >= 0))
     group_offset = offsets[file_id]
     # load halo/subhalo fields into a dict
     data = {}
-    with HDF5_File(base_path, snapshot, file_id, path_func=get_path) as f:
+    with IllustrisH5File(base_path, snapshot, file_id, path_func=get_path) as f:
         for field in f[key].keys():
             data[field] = f[key][field][group_offset]
     return data
@@ -298,7 +298,7 @@ def load_single(base_path, snapshot, halo_id=-1, subhalo_id=-1) -> dict:
 
 if __name__ == "__main__":
     # TODO: unittest
-    HDF5_File.path_func = get_path
+    IllustrisH5File.path_func = get_path
     tng_dir = "/data/procomp/Illustris/tng50-1"
     snap_id = 50
 
@@ -310,7 +310,7 @@ if __name__ == "__main__":
 
     # test opening a HDF5 file manually
     print("# Test opening a HDF5 file manually")
-    with HDF5_File(tng_dir, snap_id) as f:
+    with IllustrisH5File(tng_dir, snap_id) as f:
         print(f["Header"])
 
     # test loading main group from HDF5 file

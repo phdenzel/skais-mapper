@@ -12,11 +12,12 @@ import re
 from pathlib import Path
 from typing import Callable, Optional
 import h5py
+from skais_mapper.utils import nbytes
 
-__all__ = ["HDF5_File", "pidx_from_ptype", "ptype_from_pidx", "parse_name"]
+__all__ = ["IllustrisH5File", "pidx_from_ptype", "ptype_from_pidx", "parse_name"]
 
 
-class HDF5_File(h5py.File):
+class IllustrisH5File(h5py.File):
     """Represents an Illustris HDF5 file. Wrapper for the <h5py.File> class."""
 
     path_func: Optional[Callable] = None
@@ -29,9 +30,10 @@ class HDF5_File(h5py.File):
         path_func: Optional[Callable] = None,
         mode: str = "r",
         driver: Optional[str] = None,
+        cache_size: int | float | str = "2G",
         **kwargs,
     ):
-        """Initialize a HDF5_File instance.
+        """Initialize a IllustrisH5File instance.
 
         Args:
             base_path: Base path to the Illustris(TNG) snapshots.
@@ -48,9 +50,13 @@ class HDF5_File(h5py.File):
                 'a'          Read/write if exists, create otherwise.
             driver: Name of the driver to use; valid values are
                 None (default), 'core', 'sec2', 'direct', 'stdio', 'mpio', 'ros3'.
+            cache_size: Chunk cache size in bytes or passed as string.
             **kwargs: More keyword arguments
         """
         self.exists = True
+        self.chunk_cache_size = nbytes(cache_size)
+        kwargs.setdefault("rdcc_nbytes", int(self.chunk_cache_size))
+        kwargs.setdefault("rdcc_w0", 1.0)
         if os.path.exists(self.filename):
             super().__init__(self.filename, mode=mode, driver=driver, **kwargs)
         else:
@@ -64,9 +70,10 @@ class HDF5_File(h5py.File):
         path_func: Optional[Callable] = None,
         mode: str = "r",
         driver: Optional[str] = None,
+        cache_size: int | float | str = "1G",
         **kwargs,
     ):
-        """Construct a HDF5_File instance.
+        """Construct a IllustrisH5File instance.
 
         Args:
             base_path: Base path to the Illustris(TNG) snapshots.
@@ -83,6 +90,7 @@ class HDF5_File(h5py.File):
                 'a'          Read/write if exists, create otherwise.
             driver: Name of the driver to use; valid values are
                 None (default), 'core', 'sec2', 'direct', 'stdio', 'mpio', 'ros3'.
+            cache_size: Chunk cache size in bytes or passed as string.
             **kwargs: More keyword arguments
         """
         if path_func is None and cls.path_func is not None:
@@ -279,12 +287,12 @@ def parse_name(
 if __name__ == "__main__":
     tng_dir = "/data/illustris/tng50-1"
     snap_id = 50
-    # test HDF5_File class usage on existing/non-existing files
-    print("# Test HDF5_File class usage on existing file")
-    with HDF5_File(tng_dir, snap_id, 679) as f:
+    # test IllustrisH5File class usage on existing/non-existing files
+    print("# Test IllustrisH5File class usage on existing file")
+    with IllustrisH5File(tng_dir, snap_id, 679) as f:
         print(f)
-    print("# Test HDF5_File class usage on non-existing file")
-    with HDF5_File(tng_dir, snap_id, 680) as f:
+    print("# Test IllustrisH5File class usage on non-existing file")
+    with IllustrisH5File(tng_dir, snap_id, 680) as f:
         print(f)
 
     print("# Test parse_name")
