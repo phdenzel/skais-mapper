@@ -206,6 +206,7 @@ class Img2H5Buffer:
             target = self.default_target_name.format(current_time()[2:])
         self.target = Path(target)
         self.cache_size = nbytes(size)
+        self.index = -1
 
     @staticmethod
     def _split_glob(
@@ -468,6 +469,7 @@ class Img2H5Buffer:
         path: str | Path | None = None,
         group: str = "images",
         data: np.ndarray | dict | None = None,
+        expand_dim: bool = True,
         axis: int = 0,
         overwrite: bool | int | None = None,
         verbose: bool = False,
@@ -482,6 +484,7 @@ class Img2H5Buffer:
               it is created.
             data: Data to be written to the hdf5 file. If None, all files in
               the buffer are written to HDF5 file.
+            expand_dim: Expand dimension of data array for stacking.
             axis: Axis of the n-dimensional array where to append
             overwrite: If data should overwrite indices in a pre-existing HDF5 dataset,
               set to the index.
@@ -502,6 +505,8 @@ class Img2H5Buffer:
             raise ValueError("inc_write: no data target, add valid `group`...")
         if data is None:
             data = self.flush()
+        elif isinstance(data, np.ndarray) and expand_dim:
+            data = data[np.newaxis, ...]
         if isinstance(overwrite, bool):
             overwrite = 0 if overwrite else None
         # configure HDF5 chunk caching
@@ -551,20 +556,20 @@ class Img2H5Buffer:
                 ds_samples = ds.shape[axis]
                 data_samples = data.shape[axis]
                 if not ds_existed:
-                    index = 0
+                    self.index = 0
                 elif overwrite is None:
-                    index = ds_samples
-                    ds.resize(index+data_samples, axis=axis)
+                    self.index = ds_samples
+                    ds.resize(self.index+data_samples, axis=axis)
                 else:
-                    index = overwrite
+                    self.index = overwrite
                     if data_samples > ds_samples:
-                        ds.resize(index+data_samples, axis=axis)
+                        ds.resize(self.index+data_samples, axis=axis)
                 slc = [slice(None)] * len(ds.shape)
-                slc[axis] = slice(index, index+data_samples)
+                slc[axis] = slice(self.index, self.index+data_samples)
                 ds[tuple(slc)] = data
                 if verbose:
-                    print(f"Data {data.shape} have been written to HDF5 "
-                          f"dataset {ds.shape}@({index}:{index+data_samples})")
+                    print(f"Data {data.shape} have been written to HDF5 dataset "
+                          f"{ds.shape}@({self.index}:{self.index+data_samples})")
         else:
             warnings.warn(
                 "Img2H5Buffer did not write data to file (either "
