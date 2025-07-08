@@ -298,8 +298,20 @@ def map_TNG_sample(
         if cmap is None:
             cmap = getattr(SkaisColorMaps, "obscura")
         cbar_label = "log " + "\u03a3" + r"$_{\mathrm{dm}}$ "
+    if isinstance(kwargs["keys"][1], (tuple, list)):
+        keys = kwargs.pop("keys")
+        quantity, extent, N = obj.generate_map(keys=keys, **kwargs)
+        keys[1] = keys[1][0]
+        weight_map, _, _ = obj.generate_map(keys=keys, **kwargs)
+        projected = np.zeros_like(quantity.value)
+        np.place(
+            projected,
+            weight_map.value != 0,
+            quantity.value[weight_map.value != 0] / weight_map.value[weight_map.value != 0])
+        projected *= quantity.unit / weight_map.unit
+    else:
     # allocate arrays and raytrace
-    projected, extent, N = obj.generate_map(**kwargs)
+        projected, extent, N = obj.generate_map(**kwargs)
     if post_hook is not None:
         projected = post_hook(projected, extent)
     # convert to chosen units
@@ -525,9 +537,9 @@ def map_TNG_galaxies(
 
                 # construct actual hdf5 filename
                 if str(hdf5_file).count("{") == 2:
-                    out_hdf5 = Path(str(hdf5_file).format(snap_id, group))
+                    out_hdf5 = Path(str(hdf5_file).format(snap_id, group.replace("/", ".")))
                 elif str(hdf5_file).count("{") == 1:
-                    out_hdf5 = Path(str(hdf5_file).format(group))
+                    out_hdf5 = Path(str(hdf5_file).format(group.replace("/", ".")))
                 else:
                     out_hdf5 = hdf5_file
                 # generate maps, plots, and save to files
