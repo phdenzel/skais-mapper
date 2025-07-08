@@ -131,6 +131,15 @@ def parse_args(return_parser: bool = False, **kwargs) -> dict:
         help="Minimum number of particles to use for map generation.",
     )
 
+    # Configuration arguments
+    parser_config = subparsers.add_parser(
+        "configure",
+        aliases=["c", "conf", "config", "configuration"],
+        parents=[parser_generate],
+        add_help=False
+    )
+    parser_config.set_defaults(func=configure)
+
     if return_parser:
         return parser
     # Convert to dict
@@ -363,7 +372,6 @@ def map_TNG_sample(
         if verbose:
             print(f"Saving to [hdf5]: {img_target}:{img_h5group}")
             print(f"Saving to [hdf5]: {mdt_target}:{mdt_h5group}")
-                
 
 
 def map_TNG_galaxies(
@@ -579,10 +587,7 @@ def generate():
         sys.argv[0] = sys.argv[0].replace("-generate", "")
 
     # Options
-    configs = parse_args()
-    skais_mapper.utils.print_config(**configs)
-    if not configs["dry_run"]:
-        skais_mapper.utils.save_config(configs, configs["config_dir"])
+    configs = configure()
 
     # Loop over all samples in all snapshots
     if "tng" in configs["simulation_type"].lower():
@@ -601,6 +606,19 @@ def generate():
             dry_run=configs["dry_run"],
             verbose=configs["verbose"],
         )
+
+
+def configure():
+    """CLI entry point for creating configuration files."""
+    if sys.argv[0].endswith("skais-mapper-configure"):
+        sys.argv.insert(1, "configure")
+        sys.argv[0] = sys.argv[0].replace("-configure", "")
+
+    configs = parse_args()
+    skais_mapper.utils.print_config(**configs)
+    if not configs["dry_run"]:
+        skais_mapper.utils.save_config(configs, configs["config_dir"])
+    return configs
 
 
 def main():
