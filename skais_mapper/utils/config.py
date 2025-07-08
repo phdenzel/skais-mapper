@@ -131,6 +131,6 @@ def load_config(filename: str | Path, write_globals: bool = True, **kwargs):
                 "Try inspecting the encoded `git_diff` (if present)..."
             )
         for k in json_dict:
-            if (k.endswith("_dir") or k == "root") and json_dict[k] is not None:
+            if (k.endswith("_dir") or k.endswith("_file")) and json_dict[k] is not None:
                 json_dict[k] = Path(json_dict[k])
     return json_dict

@@ -145,7 +145,9 @@ def parse_args(return_parser: bool = False, **kwargs) -> dict:
     # Convert to dict
     args, _ = parser.parse_known_args()
     configs = vars(args)
-    if "config_file" in configs and configs["config_file"] is not None:
+    if "config_file" in configs \
+       and configs["config_file"] is not None \
+       and configs["config_file"].exists():
         configs = skais_mapper.utils.load_config(configs["config_file"])
     return configs
 
@@ -615,9 +617,13 @@ def configure():
         sys.argv[0] = sys.argv[0].replace("-configure", "")
 
     configs = parse_args()
-    skais_mapper.utils.print_config(**configs)
+    skais_mapper.utils.print_config(configs, **configs)
     if not configs["dry_run"]:
-        skais_mapper.utils.save_config(configs, configs["config_dir"])
+        if "config_file" in configs \
+           and configs["config_file"] is not None:
+            skais_mapper.utils.save_config(configs, configs["config_file"])
+        else:
+            skais_mapper.utils.save_config(configs, configs["config_dir"])
     return configs
 
 
