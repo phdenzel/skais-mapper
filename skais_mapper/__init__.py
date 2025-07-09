@@ -6,6 +6,7 @@ skais_mapper module
 
 import uuid
 import git
+import skais_mapper.__about__
 import skais_mapper.rotations
 import skais_mapper.cosmology
 import skais_mapper.raytrace
