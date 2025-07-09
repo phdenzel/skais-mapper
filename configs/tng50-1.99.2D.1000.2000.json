@@ -2,7 +2,7 @@
     "config_file": "configs/tng50-1.99.2D.1000.2000.json",
     "exclude_git_state": false,
     "include_git_diff": false,
-    "output": "/scratch/250709_tng50-1.99.2D.{}.1000.2000.hdf5",
+    "output": "/scratch/output/250709_tng50-1.99.2D.{}.1000.2000.hdf5",
     "src_dir": "/cluster/projects/ska",
     "config_dir": ".",
     "dry_run": false,
