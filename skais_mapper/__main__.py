@@ -357,7 +357,7 @@ def map_TNG_sample(
     if hdf5_save and hdf5_file is not None:
         if subdir_save:
             hdf5_file = hdf5_file.parent / group / "hdf5" / hdf5_file.name
-            if not hdf5_file.parent.exists():
+            if not hdf5_file.parent.exists() and not dry_run:
                 hdf5_file.parent.mkdir(parents=True)
         img2h5 = Img2H5Buffer(target=hdf5_file, size="2G")
         md = {
