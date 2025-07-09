@@ -448,7 +448,8 @@ def map_TNG_galaxies(
         hdf5_file = Path(output)
     csv_file = hdf5_file.parent / f"{skais_mapper.utils.get_run_id()}.group_particles.csv"
     if not csv_file.exists() and not dry_run:
-        with open(csv_file, "w", newline="") as fcsv:
+        csv_file.parent.mkdir(parents=True)
+        with csv_file.open(mode="w", newline="") as fcsv:
             writer = csv.writer(fcsv)
             writer.writerow(
                 [
