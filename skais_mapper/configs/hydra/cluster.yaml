@@ -1,0 +1,8 @@
+run:
+  dir: /scratch/outputs/${now:%Y%m%d}/${get_run_id:}
+sweep:
+  dir: /scratch/multirun/${now:%Y%m%d}/${get_run_id:}
+  subdir: ${hydra.job.num}
+output_subdir: ${hydra.run.dir}/hydra
+job:
+  chdir: False

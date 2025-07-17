@@ -1,4 +1,8 @@
 # @package _global_
+defaults:
+  - override /hydra:
+      - default
+
 dry_run: true
 save_configs: True
 num_samples:
