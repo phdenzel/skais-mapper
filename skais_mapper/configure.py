@@ -1,0 +1,33 @@
+"""
+skais_mapper.configure module: Create configuration files
+
+@author: phdenzel
+"""
+
+import logging
+from pathlib import Path
+import hydra
+from hydra.core.hydra_config import HydraConfig
+from hydra.utils import instantiate
+from omegaconf import OmegaConf, DictConfig
+
+
+@hydra.main(config_path="configs", config_name="config", version_base=None)
+def create(cfg: DictConfig | dict):
+    """Main configuration creation routine."""
+    log = logging.getLogger(__name__)
+    output_dir = HydraConfig.get().runtime.output_dir
+    opt = instantiate(cfg)
+    log.info(f"Job id: {opt.run_id}")
+    log.info(f"Output directory: {output_dir}")
+    if opt.verbose:
+        print("Configuration:")
+        print(OmegaConf.to_yaml(cfg))
+
+    if opt.save_configs:
+        hydra_subdir = Path(HydraConfig.get().output_subdir)
+        src_file = hydra_subdir / "config.yaml"
+        dst_file = Path(opt.output)
+        if dst_file.suffix not in [".yaml", ".yml"]:
+            dst_file = Path(f"./{opt.run_id}.yaml")
+        dst_file.write_bytes(src_file.read_bytes())
