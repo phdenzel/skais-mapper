@@ -29,4 +29,6 @@ GIT_DIFF = [
     + repository.index.diff("HEAD", create_patch=True)
 ]
 
+if OmegaConf.has_resolver("get_run_id"):
+    OmegaConf.clear_resolver("get_run_id")
 OmegaConf.register_new_resolver("get_run_id", skais_mapper.utils.get_run_id)

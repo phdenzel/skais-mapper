@@ -20,7 +20,8 @@ from astropy import units as au
 # from astropy.visualization import AsinhStretch
 # from astropy.visualization import LogStretch
 from typing import Optional, Any, Iterable
-from skais_mapper.utils import SkaisColorMaps, get_run_id
+import skais_mapper
+from skais_mapper.utils import SkaisColorMaps, get_run_id, compress_encode
 from skais_mapper.data import Img2H5Buffer
 from skais_mapper.raytrace import voronoi_NGP_2D
 from skais_mapper.simobjects import TNGGalaxy
@@ -475,6 +476,11 @@ def run(cfg: DictConfig | dict):
     log = logging.getLogger(__name__)
     output_dir = HydraConfig.get().runtime.output_dir
     opt = instantiate(cfg, _convert_="all")
+    if not cfg.exclude_git_state:
+        log.info(f"Git state: {skais_mapper.GIT_STATE}")
+    if cfg.include_git_diff:
+        for d in skais_mapper.GIT_DIFF:
+            log.info(f"Git diff: {compress_encode(d)}")
     log.info(f"Job id: {opt['run_id']}")
     log.info(f"Output directory: {output_dir}")
     if cfg.verbose:

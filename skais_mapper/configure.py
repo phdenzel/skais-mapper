@@ -10,6 +10,8 @@ import hydra
 from hydra.core.hydra_config import HydraConfig
 from hydra.utils import instantiate
 from omegaconf import OmegaConf, DictConfig
+import skais_mapper
+from skais_mapper.utils import compress_encode
 
 
 @hydra.main(config_path="configs", config_name="config", version_base=None)
@@ -18,6 +20,11 @@ def create(cfg: DictConfig | dict):
     log = logging.getLogger(__name__)
     output_dir = HydraConfig.get().runtime.output_dir
     opt = instantiate(cfg)
+    if not cfg.exclude_git_state:
+        log.info(f"Git state: {skais_mapper.GIT_STATE}")
+    if cfg.include_git_diff:
+        for d in skais_mapper.GIT_DIFF:
+            log.info(f"Git diff: {compress_encode(d)}")
     log.info(f"Job id: {opt.run_id}")
     log.info(f"Output directory: {output_dir}")
     if opt.verbose:
