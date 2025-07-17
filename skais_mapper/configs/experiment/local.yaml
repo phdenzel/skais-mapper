@@ -1,0 +1,8 @@
+# @package _global_
+dry_run: true
+save_configs: True
+num_samples:
+  - 6000
+  - 6001
+snapshots:
+  - 99

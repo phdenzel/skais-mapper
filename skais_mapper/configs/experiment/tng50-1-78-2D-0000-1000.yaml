@@ -1,0 +1,8 @@
+# @package _global_
+save_configs: True
+output: "/scratch/data/output/${now:%Y%m%d}-tng50-1.{}.2D.{}.0000.1000.hdf5"
+source: /cluster/projects/ska
+num_samples:
+  - 1000
+snapshots:
+  - 78

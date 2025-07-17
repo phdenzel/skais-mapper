@@ -1,0 +1,37 @@
+defaults:
+  - _self_
+  - hydra:
+      - default
+
+# General
+random_seed: 42
+exclude_git_state: False
+include_git_diff: False
+save_configs: False
+verbose: True
+run_id: ${get_run_id:}
+dry_run: False
+
+
+# Directories
+output: "./data/tng50-1.{}.2D.{}.0000.1000.hdf5"
+source: /scratch/data
+simulation_type: illustris/tng50-1
+num_samples:
+  - 1000
+snapshots:
+  - 99
+groups:
+  - dm
+  - star
+  - gas
+  - hi
+  - hi/21cm
+  - temp
+  - bfield
+grid_size: 512
+retries: 100
+part_max: null
+part_min: 10_000
+subfind_limit: 11_000
+
