@@ -20,6 +20,7 @@
           cython
           h5py
           matplotlib
+          torch
           jupyter
         ]);
         pyDists = with pkgs; [

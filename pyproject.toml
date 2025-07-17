@@ -33,6 +33,7 @@ dependencies = [
     "matplotlib",
     "gitpython>=3.1.44",
     "chuchichaestli>=0.2.8",
+    "hydra-core>=1.3.2",
 ]
 
 [dependency-groups]
@@ -48,8 +49,13 @@ Issues = "https://github.com/phdenzel/skais-mapper/issues"
 
 [project.scripts]
 "skais-mapper" = "skais_mapper.__main__:main"
-"skais-mapper-generate" = "skais_mapper.__main__:generate"
-"skais-mapper-configure" = "skais_mapper.__main__:configure"
+"skais-mapper-generate" = "skais_mapper.generate:run"
+"skais-mapper-configure" = "skais_mapper.configure:create"
+
+[project.optional-dependencies]
+nn = [
+    "torch>=2.7.1",
+]
 
 [tool.setuptools.dynamic]
 version = {attr = "skais_mapper.__about__.__version__"}
