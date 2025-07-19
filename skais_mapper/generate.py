@@ -14,18 +14,19 @@ from hydra.core.hydra_config import HydraConfig
 from hydra.utils import instantiate
 from omegaconf import OmegaConf, DictConfig
 import numpy as np
-from matplotlib.colors import Colormap  # , LogNorm
+from matplotlib.colors import Colormap
 from astropy import units as au
+
 # from astropy.visualization import ImageNormalize, MinMaxInterval
 # from astropy.visualization import AsinhStretch
 # from astropy.visualization import LogStretch
 from typing import Optional, Any, Iterable
 import skais_mapper
-from skais_mapper.utils import SkaisColorMaps, get_run_id, compress_encode
+from skais_mapper.utils import get_run_id, compress_encode
 from skais_mapper.data import Img2H5Buffer
 from skais_mapper.raytrace import voronoi_NGP_2D
 from skais_mapper.simobjects import TNGGalaxy
-from skais_mapper.plotting import plot_map
+from skais_mapper.plotting import plot_image
 
 
 def map_TNG_sample(
@@ -87,23 +88,16 @@ def map_TNG_sample(
         "rot": rot,
         "verbose": verbose,
     }
-    no_log = False
     post_hook = None
     # set up configs for group
     if group == "gas":
         kwargs["keys"] = ["particle_positions", "masses", "radii", "center"]
         if projected_unit is None:
             projected_unit = au.Msun / au.kpc**2
-        if cmap is None:
-            cmap = getattr(SkaisColorMaps, "gaseous")
-        cbar_label = "log " + "\u03a3" + r"$_{\mathrm{gas}}$ "
     elif group == "hi":
         kwargs["keys"] = ["particle_positions", "m_HI", "radii", "center"]
         if projected_unit is None:
             projected_unit = au.Msun / au.kpc**2
-        if cmap is None:
-            cmap = getattr(SkaisColorMaps, "gaseous")
-        cbar_label = "log " + "\u03a3" + r"$_{\mathrm{HI}}$ "
     elif group == "hi/21cm":
         kwargs["keys"] = ["particle_positions", "m_HI", "radii", "center"]
         kwargs["assignment_func"] = voronoi_NGP_2D
@@ -131,11 +125,7 @@ def map_TNG_sample(
 
         if projected_unit is None:
             projected_unit = au.mK
-        if cmap is None:
-            cmap = getattr(SkaisColorMaps, "nava")
-        cbar_label = r"T$_{\mathrm{b}}$ "
         flag_lim, flag_N = 0, int(grid_size**2 / 10)
-        no_log = True
     elif group == "temp":
         kwargs["keys"] = [
             "particle_positions",
@@ -145,9 +135,6 @@ def map_TNG_sample(
         ]
         if projected_unit is None:
             projected_unit = au.K
-        if cmap is None:
-            cmap = getattr(SkaisColorMaps, "phoenix")
-        cbar_label = "log T "
     elif group == "bfield":
         kwargs["keys"] = [
             "particle_positions",
@@ -157,23 +144,14 @@ def map_TNG_sample(
         ]
         if projected_unit is None:
             projected_unit = au.Gauss
-        if cmap is None:
-            cmap = getattr(SkaisColorMaps, "gravic")
-        cbar_label = "log |B| "
     elif group == "star":
         kwargs["keys"] = ["particle_positions", "masses", "radii", "center"]
         if projected_unit is None:
             projected_unit = au.Msun / au.kpc**2
-        if cmap is None:
-            cmap = getattr(SkaisColorMaps, "hertzsprung")
-        cbar_label = "log " + "\u03a3" + r"$_{\mathrm{star}}$ "
     elif group == "dm":
         kwargs["keys"] = ["particle_positions", "masses", "radii", "center"]
         if projected_unit is None:
             projected_unit = au.Msun / au.kpc**2
-        if cmap is None:
-            cmap = getattr(SkaisColorMaps, "obscura")
-        cbar_label = "log " + "\u03a3" + r"$_{\mathrm{dm}}$ "
     if isinstance(kwargs["keys"][1], (tuple, list)):
         keys = kwargs.pop("keys")
         quantity, extent, N = obj.generate_map(keys=keys, **kwargs)
@@ -183,16 +161,16 @@ def map_TNG_sample(
         np.place(
             projected,
             weight_map.value != 0,
-            quantity.value[weight_map.value != 0] / weight_map.value[weight_map.value != 0])
+            quantity.value[weight_map.value != 0] / weight_map.value[weight_map.value != 0],
+        )
         projected *= quantity.unit / weight_map.unit
     else:
-    # allocate arrays and raytrace
+        # allocate arrays and raytrace
         projected, extent, N = obj.generate_map(**kwargs)
     if post_hook is not None:
         projected = post_hook(projected, extent)
     # convert to chosen units
     projected = projected.to(projected_unit)
-    cbar_label += f"[{projected.unit}]"
     # check for potential problems
     flag = 0
     if np.sum(projected.value < flag_lim) > flag_N:
@@ -202,19 +180,32 @@ def map_TNG_sample(
     # plot data
     rot_str = f"_rotxy.{rot[0]}.{rot[1]}" if rot is not None else ""
     bname = f"{str(Path(group).stem)}_tng50-1.{obj.snapshot:02d}.gid.{obj.halo_index:07d}{rot_str}"
-    plot_map(
+    md = {
+        "class": group,
+        "gid": obj.halo_index,
+        "snapshot": obj.snapshot,
+        "units": f"{projected.unit}",
+        "extent": extent.value,
+        "units_extent": f"{extent.unit}",
+        "name": bname,
+        "num_particles": N,
+        "rotxy": rot if rot is not None else (0, 0),
+        "N_particle_flag": flag,
+        "has_bh": has_bh,
+        "rng_seed": rng_seed,
+    }
+    plot_image(
         projected,
-        extent,
-        group=group,
-        out_path=hdf5_file.parent,
-        subdir_save=subdir_save,
-        basename=bname,
-        cbar_label=cbar_label,
-        cmap=cmap,
-        no_log=no_log,
+        info=md,
+        cbar=True,
+        norm="log" if group != "hi/21cm" else None,
         savefig=png_save and not dry_run,
+        output=hdf5_file.parent / group / "png" / f"{bname}.png"
+        if subdir_save
+        else hdf5_file.parent / f"{bname}.png",
         show=dry_run,
-        verbose=verbose,
+        close=not dry_run,
+        verbose=verbose
     )
     # save data
     if npy_save:
@@ -229,27 +220,13 @@ def map_TNG_sample(
                 np_dir.mkdir(parents=True)
             np.save(np_dir / npname, projected.value)
         if verbose:
-            print(f"Saving to [npy]: {npname}")
+            print(f"Saving to [npy]: {np_dir / npname}")
     if hdf5_save and hdf5_file is not None:
         if subdir_save:
             hdf5_file = hdf5_file.parent / group / "hdf5" / hdf5_file.name
             if not hdf5_file.parent.exists() and not dry_run:
                 hdf5_file.parent.mkdir(parents=True)
         img2h5 = Img2H5Buffer(target=hdf5_file, size="2G")
-        md = {
-            "class": group,
-            "gid": obj.halo_index,
-            "snapshot": obj.snapshot,
-            "units": f"{projected.unit}",
-            "extent": extent.value,
-            "units_extent": f"{extent.unit}",
-            "name": bname,
-            "num_particles": N,
-            "rotxy": rot if rot is not None else (0, 0),
-            "N_particle_flag": flag,
-            "has_bh": has_bh,
-            "rng_seed": rng_seed,
-        }
         img_target = f"{str(hdf5_file)}"
         mdt_target = f"{str(hdf5_file)}"
         img_h5group = f"{group}/images"
@@ -311,7 +288,7 @@ def map_TNG_galaxies(
     if groups is None:
         groups = ["gas"]
     Ng = len(gids) * len(groups)
-    skip_count = [0]*(Ng//len(groups))
+    skip_count = [0] * (Ng // len(groups))
     # gather paths
     src_path = Path(src_dir) if src_dir is not None else Path("./simulations")
     tng_path = src_path / sim_type
@@ -510,6 +487,5 @@ def run(cfg: DictConfig | dict):
             rng_seed=opt["random_seed"],
             grid_size=opt["grid_size"],
             dry_run=opt["dry_run"],
-            verbose=opt["verbose"]
+            verbose=opt["verbose"],
         )
-        
