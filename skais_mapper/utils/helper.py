@@ -7,6 +7,8 @@ skais_mapper.utils.helper module: Helper functions and other stuff
 import datetime
 import base64
 import lzma
+from typing import Callable
+import functools
 
 
 def current_time(
@@ -49,3 +51,23 @@ def extract_decode(string: str) -> str:
     compressed_data = base64.b64decode(string)
     original_data = lzma.decompress(compressed_data)
     return original_data.decode("utf-8")
+
+
+def alias_kw(key: str, alias: str) -> Callable:
+    """Decorator for aliasing a keyword argument in a function
+
+    Args:
+        key: Name of keyword argument in function to alias
+        alias: Alias that can be used for this keyword argument
+    """
+    def decorator(func: Callable):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            alias_value = kwargs.get(alias)
+            if alias_value:
+                kwargs[key] = alias_value
+                del kwargs[alias]
+            result = func(*args, **kwargs)
+            return result
+        return wrapper
+    return decorator
