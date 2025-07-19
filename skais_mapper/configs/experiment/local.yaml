@@ -3,8 +3,8 @@ defaults:
   - override /hydra:
       - default
 
-dry_run: true
-save_configs: True
+dry_run: True
+save_configs: False
 num_samples:
   - 6000
   - 6001
