@@ -7,19 +7,13 @@ skais_mapper.simobjects module
 
 import time
 from pathlib import Path
-from typing import Optional, Callable, Any, Literal
+from typing import Optional, Callable, Any
 from numpy.typing import NDArray
 import numpy as np
 import scipy as sp
 import astropy.units as au
 import astropy.constants as ac
 import skais_mapper.illustris as tng
-import matplotlib.pyplot as plt
-import matplotlib.ticker as ticker
-from matplotlib.image import AxesImage
-from matplotlib.colors import Colormap
-import skais_mapper
-from skais_mapper.utils.colors import SkaisColorMaps
 from skais_mapper.cosmology import CosmoModel
 from skais_mapper.rotations import R
 from skais_mapper.raytrace import voronoi_RT_2D, voronoi_NGP_2D
@@ -1105,110 +1099,6 @@ def strip_ap_units(
                 arg_ls[i] = arg_ls[i][mask].astype(dtype)
     return arg_ls
 
-
-def plot_map(
-    projected_map: np.ndarray | au.Quantity,
-    extent: np.ndarray | au.Quantity,
-    group: str = "",
-    cmap: Optional[Colormap] = getattr(SkaisColorMaps, "gaseous"),
-    interpolation: str = "bicubic",
-    origin: Literal["upper", "lower"] | None = "lower",
-    out_path: Optional[str | Path] = None,
-    subdir_save: bool = False,
-    basename: Optional[str] = None,
-    cbar_label: str = "",
-    no_log: bool = False,
-    label: bool = True,
-    colorbar: bool = True,
-    savefig: bool = False,
-    show: bool = True,
-    verbose: bool = False,
-) -> AxesImage:
-    r"""
-    Plot the map data with specific defaults suitable for projected maps.
-
-    Args:
-        projected_map: Image map data.
-        extent: Image map extent.
-        group: Galaxy property of the map, e.g. star, gas, or dm.
-        cmap: Colormap for map plot.
-        interpolation: Alternative default for matplotlib.pyplot.imshow.
-        origin: Alternative default for matplotlib.pyplot.imshow.
-        out_path: The root in which the plot is saved.
-        subdir_save: If True, saves in subdirectories `{group}/png`
-        basename: Basname of the file to which the plot is written.
-        cbar_label: The colorbar label. Default: log $\Sigma$
-        no_log: If True, plot the data in linear scale.
-        label: If True, include the x and y axis labels in the plot.
-        colorbar: If True, include the colorbar in the plot.
-        savefig: If True, save the plot to file.
-        show: If True, show the plot.
-        verbose: If True, print status updates to command line.
-
-    Returns:
-        (matplotlib.image.AxesImage): Matplotlib image instance.
-    """
-    if hasattr(projected_map, "value"):
-        projected = projected_map.value
-    else:
-        projected = projected_map
-    if hasattr(extent, "value"):
-        ext = extent.value
-    else:
-        ext = extent
-    if hasattr(projected_map, "unit") and projected_map.unit:
-        uprojected = f"[{projected_map.unit}]"
-    else:
-        uprojected = ""
-    if hasattr(extent, "unit") and extent.unit:
-        uext = f"[{extent.unit}]"
-    else:
-        uext = ""
-    plt.figure(dpi=100)
-    if no_log:
-        img = plt.imshow(
-            projected, cmap=cmap, extent=ext, interpolation=interpolation, origin=origin
-        )
-    else:
-        img = plt.imshow(
-            np.log10(projected),
-            cmap=cmap,
-            extent=ext,
-            interpolation=interpolation,
-            origin=origin,
-        )
-    if label:
-        plt.xlabel(f"x {uext}")
-        plt.ylabel(f"y {uext}")
-    if colorbar:
-        lbl = cbar_label
-        if cbar_label is None:
-            lbl = "log " + "\u03a3 " + uprojected
-        if "[" not in lbl or "]" not in lbl:
-            lbl = cbar_label + uprojected
-        lbl = lbl.replace("solMass", "M" + r"$_{\odot}$").replace("2", "\u00b2")
-        eformat = ticker.ScalarFormatter()
-        eformat.set_powerlimits((-2, 2))
-        plt.colorbar(label=lbl, format=eformat)
-    if savefig:
-        if basename is None:
-            basename = f"{skais_mapper.utils.get_run_id()}_image"
-        if out_path is None:
-            out_path = Path("./")
-        out_path = Path(out_path)
-        if subdir_save:
-            out_path = out_path / group / "png"
-        if not out_path.exists():
-            out_path.mkdir(parents=True)
-        filename = out_path / (basename + ".png")
-        plt.savefig(filename, transparent=True, bbox_inches="tight")
-        if verbose:
-            print(f"Saving to [png]: {filename}")
-    if show:
-        plt.show()
-    else:
-        plt.close()
-    return img
 
 
 if __name__ == "__main__":
