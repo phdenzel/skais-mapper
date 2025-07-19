@@ -3,18 +3,20 @@
 #+DATE: 2022-09-06 Tue
 #+OPTIONS: author:nil title:t date:nil timestamp:nil toc:nil num:nil \n:nil
 
-~skais-mapper~ is a tool for generating and pre-processing hydrodynamics simulation
-(image) data for state-of-the-art generative AI models.
+~skais-mapper~ is a tool for generating, plotting, and pre-processing
+hydrodynamics simulation (image) data for state-of-the-art generative
+AI models.
 
 
 ** Requirements
 
-~skais-mapper~ is mostly built on python, but also includes some C extensions
-for the compute-intensive raytracing (building and visualizing datasets).
-Building from scratch thus requires ~cython~, however ~skais~ ships with
-pre-compiled C files, making the minimal requirements
+~skais-mapper~ is mostly built on python, but also includes some C
+extensions for the compute-intensive raytracing (building and
+visualizing datasets).  Building from scratch thus requires ~cython~,
+however ~skais~ ships with pre-compiled C files, making the minimal
+requirements
 
-- ~python >= 3.6~
+- ~python >= 3.10~
 - ~gcc~ (on linux) / ~clang~ (on macOS)
 
 Also see ~pyproject.toml~ for the relevant python packages.
@@ -53,11 +55,19 @@ allows to create a development environment compatible with standard
 
 ** Usage
 
-~skais-mapper~ implements a few commands for generating and
-manipulating simulation data.
-Use:
-- ~skais-mapper generate -h~
+~skais-mapper~ implements a few sub-commands for generating and
+manipulating simulation data.  Use the following to see what valid
+sub-commands exist:
+- ~[uv run] skais-mapper -h~
 
+~skais-mapper~ sub-commands implement the hydra configuration
+management framework. For more information on sub-command usage,
+inspect the ~skais_mapper/configs/~ directory, or use:
+- ~[uv run] skais-mapper [sub-command] -h~
+
+For instance, the command to generate 1000 images from snapshot 50 is
+as follows:
+- ~[uv run] skais-mapper generate +experiment=tng50-1-50-2D-0000-1000~
 
 ** Data
 
@@ -68,7 +78,3 @@ and various raytracing algorithms for 2D column density projections of
 these halos and its galaxies.  The framework generates HDF5 files with
 image datasets of various galactic properties, such as dark matter,
 star, or gas column density distributions.
-
-- ~skais-mapper/generate_maps.py~ - generates HDF5 datasets
-- ~skais-mapper/merge_hdf5.py~ - merges fragmented HDF5 datasets
-- ~skais-mapper/replot_hdf5.py~ - plots images from HDF5 datasets
