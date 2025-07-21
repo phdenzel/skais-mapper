@@ -200,7 +200,7 @@ def map_TNG_sample(
         cbar=True,
         norm="log" if group != "hi/21cm" else None,
         savefig=png_save and not dry_run,
-        output=hdf5_file.parent / group / "png" / f"{bname}.png"
+        path=hdf5_file.parent / group / "png" / f"{bname}.png"
         if subdir_save
         else hdf5_file.parent / f"{bname}.png",
         show=dry_run,

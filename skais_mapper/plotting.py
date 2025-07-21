@@ -52,7 +52,9 @@ def _from_batch(
                 metadata = metadata[idx]
         if isinstance(metadata, dict):
             for key in metadata:
-                if isinstance(metadata[key], Tensor | np.ndarray | list | tuple):
+                if isinstance(metadata[key], Tensor):
+                    metadata[key] = metadata[key].detach().clone()[batch_idx[-1]]
+                if isinstance(metadata[key], np.ndarray | list | tuple):
                     metadata[key] = metadata[key][batch_idx[-1]]
     if len(data.shape) >= 2:
         data = data.squeeze()
@@ -150,11 +152,11 @@ def _plot_data(
     xlabel: str | None = None,
     ylabel: str | None = None,
     savefig: bool = False,
-    output: str | Path | None = None,
+    path: str | Path | None = None,
     show: bool = False,
     close: bool = False,
     verbose: bool = False,
-    **kwargs
+    **kwargs,
 ) -> AxesImage:
     """Plot image data array.
 
@@ -168,7 +170,7 @@ def _plot_data(
         xlabel: Label of the x-axis.
         ylabel: Label of the y-axis.
         savefig: If `True`, save the plot to file.
-        output: Filename or filepath where the figure is saved.
+        path: Filename or filepath where the figure is saved.
         show: If `True`, show the plot.
         close: If `True`, closes the figure.
         verbose: Print results to stdout.
@@ -178,6 +180,7 @@ def _plot_data(
     dpi = kwargs.pop("dpi", 200)
     transparent = kwargs.pop("transparent", True)
     bbox_inches = kwargs.pop("bbox_inches", "tight")
+    pad_inches = kwargs.pop("pad_inches", 0)
     kwargs.setdefault("interpolation", "bicubic")
     kwargs.setdefault("origin", "lower")
     colormap = _get_cmap(colormap, info["class"] if "class" in info else None, under="k", bad="k")
@@ -190,9 +193,9 @@ def _plot_data(
             colorbar_label = _symbol_from_class(info.get("class", None))
         if "units" in info:
             colorbar_label += f" [{info['units']}]"
-        colorbar_label = colorbar_label\
-            .replace("solMass", "M" + r"$_{\odot}$")\
-            .replace("2", "\u00b2")
+        colorbar_label = colorbar_label.replace("solMass", "M" + r"$_{\odot}$").replace(
+            "2", "\u00b2"
+        )
         plt.colorbar(label=colorbar_label)
     if "units_extent" in info and xlabel is None:
         xlabel = f"[{info['units_extent']}]"
@@ -203,14 +206,16 @@ def _plot_data(
     if ylabel is not None:
         plt.ylabel(ylabel)
     if savefig:
-        if output is None:
-            output = f"./{get_run_id()}_image.png"
-        output = Path(output)
-        if not output.parent.exists():
-            output.parent.mkdir(parents=True)
-        plt.savefig(output, dpi=dpi, bbox_inches=bbox_inches, transparent=transparent)
+        if path is None:
+            path = f"./{get_run_id()}_image.png"
+        path = Path(path)
+        if not path.parent.exists():
+            path.parent.mkdir(parents=True)
+        plt.savefig(
+            path, dpi=dpi, bbox_inches=bbox_inches, pad_inches=pad_inches, transparent=transparent
+        )
         if verbose:
-            print(f"Saving to [png]: {output}")
+            print(f"Saving to [png]: {path}")
         if close:
             plt.close()
     if show:
@@ -232,11 +237,11 @@ def plot_image(
     xlabel: str | None = None,
     ylabel: str | None = None,
     savefig: bool = False,
-    output: str | Path | None = None,
+    path: str | Path | None = None,
     show: bool = False,
     close: bool = False,
     verbose: bool = False,
-    **kwargs
+    **kwargs,
 ):
     """Plot map from an array, tensor, or batch(es).
 
@@ -251,7 +256,7 @@ def plot_image(
         xlabel: Label of the x-axis.
         ylabel: Label of the y-axis.
         savefig: If `True`, save the plot to file.
-        output: Filename or filepath where the figure is saved.
+        path: Filename or filepath where the figure is saved.
         show: If `True`, show the plot.
         close: If `True`, closes the figure.
         verbose: Print results to stdout.
@@ -274,7 +279,7 @@ def plot_image_tensor(
     xlabel: str | None = None,
     ylabel: str | None = None,
     savefig: bool = False,
-    output: str | Path | None = None,
+    path: str | Path | None = None,
     show: bool = False,
     close: bool = False,
     verbose: bool = False,
@@ -293,14 +298,14 @@ def plot_image_tensor(
         xlabel: Label of the x-axis.
         ylabel: Label of the y-axis.
         savefig: If `True`, save the plot to file.
-        output: Filename or filepath where the figure is saved.
+        path: Filename or filepath where the figure is saved.
         show: If `True`, show the plot.
         close: If `True`, closes the figure.
         verbose: Print results to stdout.
         kwargs: Additional keyword arguments for `matplotlib.pyplot.imshow`.
     """
-    data, metadata = _from_batch(data, batch_idx=batch_idx)
-    metadata = kwargs.pop("info", metadata)
+    metadata = kwargs.pop("info", {})
+    data, metadata = _from_batch(data, metadata=metadata, batch_idx=batch_idx)
     _plot_data(
         data,
         metadata,
@@ -311,11 +316,11 @@ def plot_image_tensor(
         xlabel=xlabel,
         ylabel=ylabel,
         savefig=savefig,
-        output=output,
+        path=path,
         show=show,
         close=close,
         verbose=verbose,
-        **kwargs
+        **kwargs,
     )
 
 
@@ -333,7 +338,7 @@ def plot_image_array(
     xlabel: str | None = None,
     ylabel: str | None = None,
     savefig: bool = False,
-    output: str | Path | None = None,
+    path: str | Path | None = None,
     show: bool = False,
     close: bool = False,
     verbose: bool = False,
@@ -352,14 +357,14 @@ def plot_image_array(
         xlabel: Label of the x-axis.
         ylabel: Label of the y-axis.
         savefig: If `True`, save the plot to file.
-        output: Filename or filepath where the figure is saved.
+        path: Filename or filepath where the figure is saved.
         show: If `True`, show the plot.
         close: If `True`, closes the figure.
         verbose: Print results to stdout.
         kwargs: Additional keyword arguments for `matplotlib.pyplot.imshow`.
     """
-    data, metadata = _from_batch(data, batch_idx=batch_idx)
-    metadata = kwargs.pop("info", metadata)
+    metadata = kwargs.pop("info", {})
+    data, metadata = _from_batch(data, metadata=metadata, batch_idx=batch_idx)
     _plot_data(
         data,
         metadata,
@@ -370,11 +375,11 @@ def plot_image_array(
         xlabel=xlabel,
         ylabel=ylabel,
         savefig=savefig,
-        output=output,
+        path=path,
         show=show,
         close=close,
         verbose=verbose,
-        **kwargs
+        **kwargs,
     )
 
 
@@ -392,7 +397,7 @@ def plot_image_quantity(
     xlabel: str | None = None,
     ylabel: str | None = None,
     savefig: bool = False,
-    output: str | Path | None = None,
+    path: str | Path | None = None,
     show: bool = False,
     close: bool = False,
     verbose: bool = False,
@@ -411,14 +416,14 @@ def plot_image_quantity(
         xlabel: Label of the x-axis.
         ylabel: Label of the y-axis.
         savefig: If `True`, save the plot to file.
-        output: Filename or filepath where the figure is saved.
+        path: Filename or filepath where the figure is saved.
         show: If `True`, show the plot.
         close: If `True`, closes the figure.
         verbose: Print results to stdout.
         kwargs: Additional keyword arguments for `matplotlib.pyplot.imshow`.
     """
-    data, metadata = _from_batch(data, batch_idx=batch_idx)
-    metadata = kwargs.pop("info", metadata)
+    metadata = kwargs.pop("info", {})
+    data, metadata = _from_batch(data, metadata=metadata, batch_idx=batch_idx)
     data, units = data.value, data.unit
     if "units" not in metadata:
         metadata["units"] = f"{units:latex}"
@@ -432,11 +437,11 @@ def plot_image_quantity(
         xlabel=xlabel,
         ylabel=ylabel,
         savefig=savefig,
-        output=output,
+        path=path,
         show=show,
         close=close,
         verbose=verbose,
-        **kwargs
+        **kwargs,
     )
 
 
@@ -454,7 +459,7 @@ def plot_image_from_batch(
     xlabel: str | None = None,
     ylabel: str | None = None,
     savefig: bool = False,
-    output: str | Path | None = None,
+    path: str | Path | None = None,
     show: bool = False,
     close: bool = False,
     verbose: bool = False,
@@ -473,7 +478,7 @@ def plot_image_from_batch(
         xlabel: Label of the x-axis.
         ylabel: Label of the y-axis.
         savefig: If `True`, save the plot to file.
-        output: Filename or filepath where the figure is saved.
+        path: Filename or filepath where the figure is saved.
         show: If `True`, show the plot.
         close: If `True`, closes the figure.
         verbose: Print results to stdout.
@@ -496,11 +501,11 @@ def plot_image_from_batch(
         xlabel=xlabel,
         ylabel=ylabel,
         savefig=savefig,
-        output=output,
+        path=path,
         show=show,
         close=close,
         verbose=verbose,
-        **kwargs
+        **kwargs,
     )
 
 
@@ -511,10 +516,19 @@ if __name__ == "__main__":
     data_qty = au.Quantity(data_arr, "m/s")
     data_batch = (torch.rand((5, 1, 512, 512)), torch.rand((5, 1, 512, 512)))
     batch = (
-        (torch.rand((5, 1, 512, 512)),
-         torch.rand((5, 1, 512, 512))),
-        ({"class": ["gas"], "extent": [[-42.0, 42.0, -42.0, 42.0]], "units_extent": ["kpc"],},
-         {"class": ["dm"], "extent": [[-91.0, 91.0, -91.0, 91.0]], "units_extent": ["kpc"],}),
+        (torch.rand((5, 1, 512, 512)), torch.rand((5, 1, 512, 512))),
+        (
+            {
+                "class": ["gas"],
+                "extent": [[-42.0, 42.0, -42.0, 42.0]],
+                "units_extent": ["kpc"],
+            },
+            {
+                "class": ["dm"],
+                "extent": [[-91.0, 91.0, -91.0, 91.0]],
+                "units_extent": ["kpc"],
+            },
+        ),
     )
     plot_image(data_img)
     plot_image(data_imgs, 0)
