@@ -210,8 +210,7 @@ class Img2H5Buffer:
 
     @staticmethod
     def _split_glob(
-        path: str | list[str],
-        relative: bool = False
+        path: str | list[str], relative: bool = False
     ) -> tuple[list[str], list[str | None]]:
         """Split path containing wildcard into root and wildcard expression."""
         root: list[str]
