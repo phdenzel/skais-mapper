@@ -141,7 +141,7 @@ def _symbol_from_class(class_type: str | None = None):
 
 @alias_kw("colormap", "cmap")
 @alias_kw("colorbar", "cbar")
-@alias_kw("cbar_label", "colorbar_label")
+@alias_kw("colorbar_label", "cbar_label")
 def _plot_data(
     data: np.ndarray,
     info: dict = {},
@@ -191,8 +191,8 @@ def _plot_data(
     if colorbar:
         if colorbar_label is None:
             colorbar_label = _symbol_from_class(info.get("class", None))
-        if "units" in info:
-            colorbar_label += f" [{info['units']}]"
+            if "units" in info:
+                colorbar_label += f" [{info['units']}]"
         colorbar_label = colorbar_label.replace("solMass", "M" + r"$_{\odot}$").replace(
             "2", "\u00b2"
         )
