@@ -66,6 +66,7 @@ def alias_kw(key: str, alias: str) -> Callable:
             alias_value = kwargs.get(alias)
             if alias_value:
                 kwargs[key] = alias_value
+            if alias in kwargs:
                 del kwargs[alias]
             result = func(*args, **kwargs)
             return result
