@@ -1,5 +1,4 @@
-"""
-skais_mapper.utils.primes module: Functions for testing and computing primes.
+"""skais_mapper.utils.primes module: Functions for testing and computing primes.
 
 @author: phdenzel
 """

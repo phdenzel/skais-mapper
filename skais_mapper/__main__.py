@@ -1,6 +1,5 @@
 #!/usr/bin/env python
-"""
-skais_mapper.__main__ entry points
+"""skais_mapper.__main__: Entry points.
 
 @author: phdenzel
 """
@@ -59,4 +58,4 @@ def main():
 
 
 if __name__ == "__main__":
-    generate()
+    main()

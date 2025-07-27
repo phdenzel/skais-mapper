@@ -1,5 +1,4 @@
-"""
-skais_mapper.illustris.groupcat module: Illustris file i/o for FoF and Subfind group catalog
+"""skais_mapper.illustris.groupcat module: Illustris file i/o for FoF and Subfind group catalog.
 
 @author: phdenzel
 Adapted from: https://github.com/illustristng/illustris_python
@@ -79,7 +78,7 @@ def load_catalog(
     data = {}
     if fields is None:
         fields = []
-    elif isinstance(fields, (str, bytes)):
+    elif isinstance(fields, str | bytes):
         fields = [fields]
     # load header from first partition
     IllustrisH5File.path_func = get_path
@@ -260,8 +259,7 @@ def load(
 
 
 def load_single(base_path, snapshot, halo_id=-1, subhalo_id=-1) -> dict:
-    """
-    Fetch the complete group catalog information for a single halo or subhalo.
+    """Fetch the complete group catalog information for a single halo or subhalo.
 
     Args:
         base_path: Base path to the Illustris(TNG) snapshots.

@@ -1,5 +1,4 @@
-"""
-skais_mapper.utils module
+"""skais_mapper.utils module: All utility functions can be imported from here.
 
 @author: phdenzel
 """

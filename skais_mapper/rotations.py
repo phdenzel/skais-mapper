@@ -1,10 +1,9 @@
-"""
-skais_mapper.cast module
+"""skais_mapper.rotations module: Rotation operators for point cloud arrays.
 
 @author: phdenzel
 """
 
-from typing import Optional, Self
+from typing import Self
 import numpy as np
 # import healpy as hp
 # import pynbody as pb
@@ -12,14 +11,11 @@ import numpy as np
 import skais_mapper
 
 
-class R(object):
-    """
-    Class of rotation operators
-    """
+class R:
+    """Class of rotation operators."""
 
-    def __init__(self, omega: Optional[np.ndarray] = None):
-        """
-        Initialize rotator object.
+    def __init__(self, omega: np.ndarray | None = None):
+        """Initialize rotator object.
 
         Args:
             omega: Rotation angle in
@@ -27,8 +23,7 @@ class R(object):
         self.omega = omega
 
     def __call__(self, arr: np.ndarray, **kwargs):
-        """
-        Rotate the input according to this rotation operator.
+        """Rotate the input according to this rotation operator.
 
         Args:
             arr: The array to be rotated
@@ -48,8 +43,7 @@ class R(object):
         return arr
 
     def __mul__(self, other: Self):
-        """
-        Combine rotation operators through multiplication.
+        """Combine rotation operators through multiplication.
 
         Args:
             other: Another rotation object to be multiplied.
@@ -61,8 +55,7 @@ class R(object):
 
     @classmethod
     def x(cls, theta: float, degrees: bool = True):
-        """
-        Rotation operator about the current x-axis by angle theta.
+        """Rotation operator about the current x-axis by angle theta.
 
         Args:
             theta: Rotation angle in degrees or radians (see below)
@@ -73,8 +66,7 @@ class R(object):
 
     @classmethod
     def y(cls, theta: float, degrees: bool = True):
-        """
-        Rotation operator about the current y-axis by angle theta.
+        """Rotation operator about the current y-axis by angle theta.
 
         Args:
             theta: Rotation angle in degrees or radians (see below)
@@ -85,8 +77,7 @@ class R(object):
 
     @classmethod
     def z(cls, theta: float, degrees: bool = True):
-        """
-        Rotation operator about the current z-axis by angle theta.
+        """Rotation operator about the current z-axis by angle theta.
 
         Args:
             theta: Rotation angle in degrees or radians (see below)
@@ -97,8 +88,7 @@ class R(object):
 
     @staticmethod
     def _x(theta: float, degrees: bool = True):
-        """
-        Rotation matrix about the current x-axis by angle theta
+        """Rotation matrix about the current x-axis by angle theta.
 
         Args:
             theta: Rotation angle in degrees or radians (see below)
@@ -116,8 +106,7 @@ class R(object):
 
     @staticmethod
     def _y(theta: float, degrees: bool = True):
-        """
-        Rotation matrix about the current y-axis by angle theta
+        """Rotation matrix about the current y-axis by angle theta.
 
         Args:
             theta: Rotation angle in degrees or radians (see below)
@@ -135,8 +124,7 @@ class R(object):
 
     @staticmethod
     def _z(theta: float, degrees: bool = True):
-        """
-        Rotation matrix about the current z-axis by angle theta
+        """Rotation matrix about the current z-axis by angle theta.
 
         Args:
             theta: Rotation angle in degrees or radians (see below)

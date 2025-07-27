@@ -1,5 +1,4 @@
-"""
-skais_mapper module
+"""skais_mapper module: The main module.
 
 @author: phdenzel
 """

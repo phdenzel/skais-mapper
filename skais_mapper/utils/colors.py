@@ -1,6 +1,4 @@
-#!/usr/bin/env python
-"""
-skais_mapper.utils.colors module: Color module for more beautiful plots
+"""skais_mapper.utils.colors module: Color module for more beautiful plots.
 
 @author: phdenzel
 """
@@ -12,9 +10,6 @@ from matplotlib.cm import ScalarMappable
 from matplotlib import pyplot as plt
 
 __all__ = ["color_variant", "SkaisColors", "SkaisColorMaps"]
-
-lscmap_t = type[LinearSegmentedColormap]
-cmap_t = type[Colormap]
 
 
 def color_variant(hex_color: str, shift: int = 10) -> str:
@@ -208,8 +203,10 @@ class SkaisColors:
             "#EBC79A",
             "#FFFFFF",
         ],
-        "shapely": [(30.0 / 255, 136.0 / 255, 229.0 / 255, l) for l in np.linspace(1, 0, 100)]
-        + [(255.0 / 255, 13.0 / 255, 87.0 / 255, l) for l in np.linspace(0, 1, 100)],
+        "shapely": [
+            (30.0 / 255, 136.0 / 255, 229.0 / 255, alpha) for alpha in np.linspace(1, 0, 100)
+        ]
+        + [(255.0 / 255, 13.0 / 255, 87.0 / 255, alpha) for alpha in np.linspace(0, 1, 100)],
     }
 
     for k, p in palettes.items():
@@ -226,7 +223,7 @@ class SkaisColors:
         cls,
         color_str: str,
         secondary_color: str | None = None,
-    ) -> lscmap_t:
+    ) -> LinearSegmentedColormap:
         """Create a colormap from a single color.
 
         Args:
@@ -260,7 +257,7 @@ class SkaisColorMaps:
     locals().pop("p")
 
     @classmethod
-    def random(cls) -> lscmap_t:
+    def random(cls) -> LinearSegmentedColormap:
         """Choose a random color map.
 
         Returns:
@@ -275,13 +272,12 @@ class SkaisColorMaps:
         Returns:
             (mpl.colors.LinearSegmentedColormap object): colormap generated from custom list
         """
-        for cmap in cls.aslist:
-            yield cmap
+        yield from cls.aslist
 
     @classmethod
     def reverse(
-        cls, cmap: cmap_t, set_bad: str = None, set_under: str = None, set_over: str = None
-    ) -> lscmap_t:
+        cls, cmap: Colormap, set_bad: str = None, set_under: str = None, set_over: str = None
+    ) -> LinearSegmentedColormap:
         """Reverse the specified colormap.
 
         Args:

@@ -1,6 +1,5 @@
 # pylint: disable=W1401
-"""
-skais_mapper.illustris.util module: Illustris simulation snapshot utilities
+"""skais_mapper.illustris.util module: Illustris simulation snapshot utilities.
 
 @author: phdenzel
 Adapted from: https://github.com/illustristng/illustris_python
@@ -10,7 +9,7 @@ import os
 import warnings
 import re
 from pathlib import Path
-from typing import Callable, Optional
+from collections.abc import Callable
 import h5py
 from skais_mapper.utils import nbytes
 
@@ -20,16 +19,16 @@ __all__ = ["IllustrisH5File", "pidx_from_ptype", "ptype_from_pidx", "parse_name"
 class IllustrisH5File(h5py.File):
     """Represents an Illustris HDF5 file. Wrapper for the <h5py.File> class."""
 
-    path_func: Optional[Callable] = None
+    path_func: Callable | None = None
 
     def __init__(
         self,
         base_path: str | Path,
         snapshot: int,
         partition: int = 0,
-        path_func: Optional[Callable] = None,
+        path_func: Callable | None = None,
         mode: str = "r",
-        driver: Optional[str] = None,
+        driver: str | None = None,
         cache_size: int | float | str = "2G",
         **kwargs,
     ):
@@ -67,9 +66,9 @@ class IllustrisH5File(h5py.File):
         base_path: str | Path,
         snapshot: int,
         partition: int = 0,
-        path_func: Optional[Callable] = None,
+        path_func: Callable | None = None,
         mode: str = "r",
-        driver: Optional[str] = None,
+        driver: str | None = None,
         cache_size: int | float | str = "1G",
         **kwargs,
     ):
@@ -192,13 +191,13 @@ def ptype_from_pidx(pidx: int | str) -> str:
 
 def parse_name(
     filename: str | Path,
-    root: Optional[str] = None,
-    groups: Optional[str | list[str]] = None,
-    mask: Optional[str] = None,
-    formatters: Optional[dict] = None,
+    root: str | None = None,
+    groups: str | list[str] | None = None,
+    mask: str | None = None,
+    formatters: dict | None = None,
     **kwargs,
 ) -> dict | None:
-    r"""Parse a filename of Illustris preprocessed image files (see scripts)
+    r"""Parse a filename of Illustris preprocessed image files (see scripts).
 
     Args:
         filename:

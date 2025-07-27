@@ -1,5 +1,4 @@
-"""
-skais_mapper.configure module: Create configuration files
+"""skais_mapper.configure module: Create configuration files.
 
 @author: phdenzel
 """

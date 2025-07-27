@@ -1,5 +1,4 @@
-"""
-skais_mapper.plotting module
+"""skais_mapper.plotting module: Plotting routines for maps and images.
 
 @author: phdenzel
 """
@@ -10,11 +9,10 @@ import astropy.units as au
 from skais_mapper.utils import SkaisColorMaps, get_run_id, alias_kw
 from matplotlib import colormaps
 from matplotlib import pyplot as plt
-import matplotlib.ticker as ticker
 from matplotlib.image import AxesImage
 from matplotlib.colors import Colormap
 from functools import singledispatch
-from typing import Any, Optional, Literal
+from typing import Any
 from collections.abc import Sequence
 
 try:

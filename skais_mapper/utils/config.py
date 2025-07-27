@@ -1,5 +1,4 @@
-"""
-skais_mapper.utils.config module: Configuration and runtime utility functions
+"""skais_mapper.utils.config module: Configuration and runtime utility functions.
 
 @author: phdenzel
 """

@@ -1,13 +1,13 @@
 # pylint: disable=C0103
-"""
-skais_mapper.simobjects module
+"""skais_mapper.simobjects module: Classes representing data objects from simulations.
 
 @author: phdenzel
 """
 
 import time
 from pathlib import Path
-from typing import Optional, Callable, Any
+from typing import Any
+from collections.abc import Callable
 from numpy.typing import NDArray
 import numpy as np
 import scipy as sp
@@ -23,9 +23,7 @@ __all__ = ["SPHGalaxy", "TNGGalaxy", "GasolineGalaxy"]
 
 
 class SPHGalaxy:
-    """
-    A generic base SPH Galaxy simulation parser
-    """
+    """A generic base SPH Galaxy simulation parser."""
 
     primary_hdf5_fields: dict[int, list[str]]
     optional_hdf5_fields: dict[int, list[str]]
@@ -36,15 +34,14 @@ class SPHGalaxy:
         dec: float = 0.0,
         distance: float = 3.0,
         peculiar_v: float = 0.0,
-        rotation: Optional[Callable] = None,
-        cosmo_pars: Optional[dict] = None,
-        units: Optional[dict] = None,
-        particle_type: Optional[str] = None,
+        rotation: Callable | None = None,
+        cosmo_pars: dict | None = None,
+        units: dict | None = None,
+        particle_type: str | None = None,
         as_float32: bool = False,
         verbose: bool = False,
     ):
-        """
-        Initialize an SPHGalaxy base class instance
+        """Initialize an SPHGalaxy base class instance.
 
         Args:
             ra: The right ascension sky coordinate
@@ -79,18 +76,14 @@ class SPHGalaxy:
 
     @property
     def p_idx(self) -> int:
-        """
-        Particle index {0: 'gas', 1: 'dm', 2: 'tracers', 3: 'stars', 4: 'BHs'}
-        """
+        """Particle index {0: 'gas', 1: 'dm', 2: 'tracers', 3: 'stars', 4: 'BHs'}."""
         if not hasattr(self, "_p_idx"):
             self._p_idx = 0
         return self._p_idx
 
     @p_idx.setter
     def p_idx(self, p_idx: int | str):
-        """
-        Setter for particle index
-        """
+        """Setter for particle index."""
         print("SPHGalaxy.p_idx.setter")
         if isinstance(p_idx, int):
             self._p_idx = p_idx
@@ -101,22 +94,17 @@ class SPHGalaxy:
 
     @property
     def particle_type(self) -> str:
-        """
-        Particle type {0: 'gas', 1: 'dm', 2: 'tracers', 3: 'stars', 4: 'BHs'}
-        """
+        """Particle type {0: 'gas', 1: 'dm', 2: 'tracers', 3: 'stars', 4: 'BHs'}."""
         p_idx = self.p_idx
         return tng.util.ptype_from_pidx(p_idx)
 
     @particle_type.setter
     def particle_type(self, ptype: int | str):
-        """
-        Setter for particle type
-        """
+        """Setter for particle type."""
         self.p_idx = ptype
 
     def load_header(self) -> dict:
-        """
-        Dummy method, to be overridden in subclasses.
+        """Dummy method, to be overridden in subclasses.
 
         Returns:
             (dict): the header dictionary which should contain
@@ -134,8 +122,7 @@ class SPHGalaxy:
         return self.header
 
     def load_cosmology(self, cosmo_pars: dict | None) -> dict:
-        """
-        Dummy method, to be overridden in subclasses.
+        """Dummy method, to be overridden in subclasses.
 
         Returns:
             (dict): a dictionary with cosmological parameters pulled from a header
@@ -147,8 +134,7 @@ class SPHGalaxy:
         return cosmo_pars
 
     def angular_distance(self, eps: float = 1e-4):
-        """
-        Calculate the angular distance of the simulation at the given redshift
+        """Calculate the angular distance of the simulation at the given redshift.
 
         Args:
             eps: minimum cutoff value for the redshift
@@ -161,8 +147,7 @@ class SPHGalaxy:
         return dang
 
     def angular_resolution(self, eps: float = 1e-4):
-        """
-        Calculate the angular scale of the simulation at the given redshift
+        """Calculate the angular scale of the simulation at the given redshift.
 
         Args:
             eps: minimum cutoff value for the redshift
@@ -176,9 +161,7 @@ class SPHGalaxy:
 
     @property
     def boxsize(self) -> au.Quantity:
-        """
-        The virtual boxsize of the simulation
-        """
+        """The virtual boxsize of the simulation."""
         if not hasattr(self, "header"):
             self.header = self.load_header()
         L = self.units("l/h")
@@ -186,8 +169,7 @@ class SPHGalaxy:
         return box.to(au.kpc)
 
     def units(self, u: str) -> au.Quantity:
-        """
-        Get common units from descriptor strings ('l', 'm', 'v', and variants).
+        """Get common units from descriptor strings ('l', 'm', 'v', and variants).
 
         Args:
             u: the unit string describing the dimensionality;
@@ -231,8 +213,7 @@ class SPHGalaxy:
                 return 1
 
     def set_units(self, length: float, velocity: float, mass: float):
-        """
-        Set units in the header attribute
+        """Set units in the header attribute.
 
         Args:
             length: length unit
@@ -247,9 +228,7 @@ class SPHGalaxy:
 
     @property
     def UnitLength(self) -> au.Quantity:
-        """
-        The simulation's length unit as astropy.units.Quantity
-        """
+        """The simulation's length unit as astropy.units.Quantity."""
         if not hasattr(self, "header"):
             self.header = self.load_header()
         h = self.header["snapshot"]
@@ -263,9 +242,7 @@ class SPHGalaxy:
 
     @property
     def UnitMass(self) -> au.Quantity:
-        """
-        The simulation's mass unit as astropy.units.Quantity
-        """
+        """The simulation's mass unit as astropy.units.Quantity."""
         if not hasattr(self, "header"):
             self.header = self.load_header()
         h = self.header["snapshot"]
@@ -279,9 +256,7 @@ class SPHGalaxy:
 
     @property
     def UnitVelocity(self) -> au.Quantity:
-        """
-        The simulation's velocity unit as astropy.units.Quantity
-        """
+        """The simulation's velocity unit as astropy.units.Quantity."""
         if not hasattr(self, "header"):
             self.header = self.load_header()
         h = self.header["snapshot"]
@@ -294,8 +269,7 @@ class SPHGalaxy:
         return velocity
 
     def load_data(self, **kwargs) -> dict:
-        """
-        Dummy method, to be overridden in subclasses.
+        """Dummy method, to be overridden in subclasses.
 
         Returns:
             (dict): the data dictionary loaded from the simulations containing:
@@ -314,9 +288,7 @@ class SPHGalaxy:
 
     @property
     def density(self) -> au.Quantity | None:
-        """
-        The simulation's density data in corresponding units
-        """
+        """The simulation's density data in corresponding units."""
         if not hasattr(self, "data"):
             self.data = self.load_data()
         M = self.units("m/h")
@@ -331,9 +303,7 @@ class SPHGalaxy:
 
     @property
     def masses(self) -> au.Quantity | None:
-        """
-        The simulation's mass data in corresponding units
-        """
+        """The simulation's mass data in corresponding units."""
         if not hasattr(self, "data"):
             self.data = self.load_data()
         M = self.units("m/h")
@@ -346,9 +316,7 @@ class SPHGalaxy:
 
     @property
     def particle_mass(self) -> au.Quantity | float | None:
-        """
-        The simulation's particle mass (for constant mass particles)
-        """
+        """The simulation's particle mass (for constant mass particles)."""
         h = self.load_header()["snapshot"]
         M = self.units("m/h")
         p_mass = None
@@ -358,9 +326,7 @@ class SPHGalaxy:
 
     @property
     def particle_positions(self) -> au.Quantity | None:
-        """
-        The simulation's particle position data in corresponding units
-        """
+        """The simulation's particle position data in corresponding units."""
         if not hasattr(self, "data"):
             self.data = self.load_data()
         L = self.units("l/h")
@@ -370,9 +336,7 @@ class SPHGalaxy:
 
     @property
     def cell_positions(self) -> au.Quantity | None:
-        """
-        The simulation's cell position data in corresponding units
-        """
+        """The simulation's cell position data in corresponding units."""
         if not hasattr(self, "data"):
             self.data = self.load_data()
         L = self.units("l/h")
@@ -382,9 +346,7 @@ class SPHGalaxy:
 
     @property
     def velocities(self) -> au.Quantity | None:
-        """
-        The simulation's particle velocity data in corresponding units
-        """
+        """The simulation's particle velocity data in corresponding units."""
         if not hasattr(self, "data"):
             self.data = self.load_data()
         V = self.units("vp")
@@ -394,9 +356,7 @@ class SPHGalaxy:
 
     @property
     def internal_energy(self) -> au.Quantity | None:
-        """
-        The simulation's internal energy data in corresponding units
-        """
+        """The simulation's internal energy data in corresponding units."""
         if not hasattr(self, "data"):
             self.data = self.load_data()
         U = np.power(self.units("v"), 2)
@@ -406,9 +366,7 @@ class SPHGalaxy:
 
     @property
     def x_e(self) -> au.Quantity | None:
-        """
-        The simulation's electron abundance data in corresponding units
-        """
+        """The simulation's electron abundance data in corresponding units."""
         if not hasattr(self, "data"):
             self.data = self.load_data()
         if "ElectronAbundance" in self.data:
@@ -417,9 +375,7 @@ class SPHGalaxy:
 
     @property
     def x_H(self) -> au.Quantity | None:
-        """
-        The simulation's neutral hydrogen abundance data in corresponding units
-        """
+        """The simulation's neutral hydrogen abundance data in corresponding units."""
         if not hasattr(self, "data"):
             self.data = self.load_data()
         if "GFM_Metals" in self.data:
@@ -428,9 +384,7 @@ class SPHGalaxy:
 
     @property
     def x_HI(self) -> au.Quantity | None:
-        """
-        The simulation's ionized hydrogen abundance data in corresponding units
-        """
+        """The simulation's ionized hydrogen abundance data in corresponding units."""
         if not hasattr(self, "data"):
             self.data = self.load_data()
         if "NeutralHydrogenAbundance" in self.data:
@@ -439,9 +393,7 @@ class SPHGalaxy:
 
     @property
     def n_H(self) -> au.Quantity | None:
-        """
-        The simulation's hydrogen number density data in corresponding units
-        """
+        """The simulation's hydrogen number density data in corresponding units."""
         if self.density is None:
             return None
         x_H = self.x_H
@@ -453,9 +405,7 @@ class SPHGalaxy:
 
     @property
     def m_H(self) -> au.Quantity | None:
-        """
-        The simulation's hydrogen mass data in corresponding units
-        """
+        """The simulation's hydrogen mass data in corresponding units."""
         if self.masses is None:
             return None
         m_H = self.x_H * self.masses
@@ -463,18 +413,14 @@ class SPHGalaxy:
 
     @property
     def n_HI(self) -> au.Quantity | None:
-        """
-        The simulation's ionized hydrogen number density data in corresponding units
-        """
+        """The simulation's ionized hydrogen number density data in corresponding units."""
         if self.x_HI is None or self.n_H is None:
             return None
         return self.x_HI * self.n_H
 
     @property
     def m_HI(self) -> au.Quantity | None:
-        """
-        The simulation's ionized hydrogen mass data in corresponding units
-        """
+        """The simulation's ionized hydrogen mass data in corresponding units."""
         if self.x_HI is None or self.m_H is None:
             return None
         m_HI = self.x_HI * self.m_H
@@ -488,8 +434,7 @@ class SPHGalaxy:
         as_float32: bool = False,
         verbose: bool = True,
     ) -> au.Quantity | NDArray:
-        """
-        Compute the distance of each gas particle to its k nearest neighbors
+        """Compute the distance of each gas particle to its k nearest neighbors.
 
         Args:
             k: Number of nearest neighbors.
@@ -523,9 +468,7 @@ class SPHGalaxy:
 
 
 class TNGGalaxy(SPHGalaxy):
-    """
-    IllustrisTNG Galaxy simulation parser
-    """
+    """IllustrisTNG Galaxy simulation parser."""
 
     primary_hdf5_fields: dict[int, list[str]] = {
         0: [
@@ -547,15 +490,14 @@ class TNGGalaxy(SPHGalaxy):
     }
 
     def __init__(self, base_path: str | Path, snapshot: int, halo_index: int, **kwargs):
-        """
-        Initialize a TNGGalaxy instance.
+        """Initialize a TNGGalaxy instance.
 
         Args:
-        base_path (str): Base path to the Illustris(TNG) snapshots.
-        snapshot (int): Snapshot ID {0-99}.
-        halo_index (int): Halo index, index of the subhalo ID list.
-        kwargs (dict): Additional keyword arguments
-            - verbose (bool): If True, print information to the command line.
+            base_path (str): Base path to the Illustris(TNG) snapshots.
+            snapshot (int): Snapshot ID {0-99}.
+            halo_index (int): Halo index, index of the subhalo ID list.
+            kwargs (dict): Additional keyword arguments
+                - verbose (bool): If True, print information to the command line.
         """
         kwargs.setdefault("verbose", False)
         self.base_path = base_path
@@ -567,18 +509,14 @@ class TNGGalaxy(SPHGalaxy):
 
     @property
     def halo_index(self):
-        """
-        The halo index getter
-        """
+        """The halo index getter."""
         if hasattr(self, "_halo_index"):
             return self._halo_index
         return 0
 
     @halo_index.setter
     def halo_index(self, index):
-        """
-        The halo index setter
-        """
+        """The halo index setter."""
         if hasattr(self, "_halo_index") and self._halo_index == index:
             return
         self._halo_index = index
@@ -589,14 +527,11 @@ class TNGGalaxy(SPHGalaxy):
 
     @SPHGalaxy.p_idx.setter
     def p_idx(self, p_idx: int | str):
-        """
-        Setter for particle index
-        """
+        """Setter for particle index."""
         SPHGalaxy.p_idx.fset(self, p_idx)
 
     def load_header(self) -> dict:
-        """
-        Load the header (overrides parent class method).
+        """Load the header (overrides parent class method).
 
         Returns:
             (dict): a dictionary containing the headers from a snapshot and the
@@ -608,8 +543,9 @@ class TNGGalaxy(SPHGalaxy):
         return header
 
     def load_cosmology(self, cosmo_pars: dict | None) -> dict:
-        """
-        Load the cosmological parameters from the header dictionary (overrides parent class method).
+        """Load the cosmological parameters from the header dictionary.
+
+        Note: This overrides the parent class method.
 
         Args:
             cosmo_pars: The default dictionary for the CosmoModel dataclass.
@@ -636,8 +572,7 @@ class TNGGalaxy(SPHGalaxy):
         filtered: bool = True,
         verbose: bool = False,
     ) -> NDArray:
-        """
-        Pull a list of subhalo IDs from the snapshot's FOF group catalog.
+        """Pull a list of subhalo IDs from the snapshot's FOF group catalog.
 
         Note: the indices of the list are halo IDs.
 
@@ -664,8 +599,7 @@ class TNGGalaxy(SPHGalaxy):
         return galaxy_list
 
     def load_subhalo(self, halo_index: int = 0, verbose: bool = False) -> dict:
-        """
-        Load the FOF subhalo metadata of a specified group ID
+        """Load the FOF subhalo metadata of a specified group ID.
 
         Args:
             halo_index: the group ID corresponding to a subhalo ID
@@ -684,27 +618,21 @@ class TNGGalaxy(SPHGalaxy):
 
     @property
     def N_particles_type(self) -> list[int]:
-        """
-        Number of particles per type in the galaxy
-        """
+        """Number of particles per type in the galaxy."""
         if hasattr(self, "subhalo"):
             return [int(i) for i in self.subhalo["SubhaloLenType"]]
         return []
 
     @property
     def N_particles(self) -> int:
-        """
-        Total number of particles in the galaxy
-        """
+        """Total number of particles in the galaxy."""
         if hasattr(self, "subhalo"):
             return int(self.subhalo["SubhaloLen"])
         return -1
 
     @property
     def center(self) -> au.Quantity:
-        """
-        Center position getter of the galaxy in units of L/h
-        """
+        """Center position getter of the galaxy in units of L/h."""
         if not hasattr(self, "subhalo"):
             self.subhalo = self.load_subhalo(self.halo_index)
         L = self.units("l/h")
@@ -714,14 +642,13 @@ class TNGGalaxy(SPHGalaxy):
 
     def load_data(
         self,
-        halo_index: Optional[int] = None,
-        primary_fields: Optional[list[str]] = None,
-        optional_fields: Optional[list[str]] = None,
-        particle_type: Optional[str] = None,
+        halo_index: int | None = None,
+        primary_fields: list[str] | None = None,
+        optional_fields: list[str] | None = None,
+        particle_type: str | None = None,
         **kwargs,
     ):
-        """
-        Load the snapshot's relevant subset data of the specified group ID
+        """Load the snapshot's relevant subset data of the specified group ID.
 
         Args:
             halo_index: Galaxy/Halo ID in the simulation.
@@ -786,9 +713,7 @@ class TNGGalaxy(SPHGalaxy):
 
     @property
     def temperature(self):
-        """
-        Temperature data getter in units of Kelvin
-        """
+        """Temperature data getter in units of Kelvin."""
         # ~ O(1)
         x_H = self.x_H
         # choose constants in favorable units to avoid overflows
@@ -801,9 +726,7 @@ class TNGGalaxy(SPHGalaxy):
 
     @property
     def magnetic_field(self):
-        """
-        Magnetic vector field in cgs units of Gauss
-        """
+        """Magnetic vector field in cgs units of Gauss."""
         if not hasattr(self, "data"):
             self.data = self.load_data()
         srP = self.units("sqrtP")
@@ -813,17 +736,13 @@ class TNGGalaxy(SPHGalaxy):
 
     @property
     def magnetic_field_strength(self):
-        """
-        Magnetic field strength in units of SI Gauss
-        """
+        """Magnetic field strength in units of SI Gauss."""
         bfield3D = self.magnetic_field * np.sqrt(4 * np.pi * ac.mu0)
         return np.linalg.norm(bfield3D, axis=-1).to(au.Gauss)
 
     @property
     def radii(self):
-        """
-        Particle radius distances assuming spherical shape
-        """
+        """Particle radius distances assuming spherical shape."""
         # Voronoi cell volume
         vol = self.masses / self.density
         # estimate radii assuming spherical shape
@@ -832,16 +751,12 @@ class TNGGalaxy(SPHGalaxy):
 
     @property
     def r_cell(self):
-        """
-        Alias for radii
-        """
+        """Alias for radii."""
         return self.radii
 
     @property
     def hsml(self):
-        """
-        Average kernel smoothing length
-        """
+        """Average kernel smoothing length."""
         # hsml has in mind a cubic spline that =0 at h, I think
         # find_fwhm(CubicSplineKernel().kernel)
         hsml = 2.5 * self.r_cell  # * find_fwhm(CubicSplineKernel().kernel)
@@ -849,12 +764,11 @@ class TNGGalaxy(SPHGalaxy):
 
     def get_mapping_arrays(
         self,
-        keys: Optional[list[str]] = None,
-        factors: Optional[list[float]] = None,
+        keys: list[str] | None = None,
+        factors: list[float] = None,
         verbose: bool = False,
     ) -> list:
-        """
-        Fetch data (arrays or scalars) from a TNGGalaxy object given keys.
+        """Fetch data (arrays or scalars) from a TNGGalaxy object given keys.
 
         Args:
             keys: Keys to fetch data.
@@ -870,7 +784,7 @@ class TNGGalaxy(SPHGalaxy):
             factors = [1, 1, 3]
         vals = []
         for key, f in zip(keys, factors):
-            if isinstance(key, (tuple, list)):
+            if isinstance(key, tuple | list):
                 try:
                     v1 = getattr(self, key[0])
                 except Exception:
@@ -892,8 +806,8 @@ class TNGGalaxy(SPHGalaxy):
 
     def generate_map(
         self,
-        keys: Optional[list[str]] = None,
-        factors: Optional[list[float]] = None,
+        keys: list[str] | None = None,
+        factors: list[float] | None = None,
         use_half_mass_rad: bool = True,
         fh: float = 3,
         grid_size: int = 512,
@@ -901,13 +815,12 @@ class TNGGalaxy(SPHGalaxy):
         yaxis: int = 1,
         periodic: bool = True,
         assignment_func: Callable = voronoi_RT_2D,
-        tracers: Optional[int] = None,
-        divisions: Optional[int] = None,
+        tracers: int | None = None,
+        divisions: int | None = None,
         rot: list[int] | list[float] | None = None,
         verbose: bool = False,
     ) -> tuple[au.Quantity, au.Quantity, int] | Any:
-        """
-        Generate raytracing projection map.
+        """Generate raytracing projection map.
 
         Args:
             keys: Keys to fetch data for projecting onto the map.
@@ -946,9 +859,7 @@ class TNGGalaxy(SPHGalaxy):
             else:
                 factors.insert(keys.index("SubhaloHalfmassRadType"), self.units("l/h"))
         if assignment_func not in [voronoi_RT_2D, voronoi_NGP_2D]:
-            raise ValueError(
-                f"Assignment function `{assignment_func.__name__}` not compatible."
-            )
+            raise ValueError(f"Assignment function `{assignment_func.__name__}` not compatible.")
         uarrs = self.get_mapping_arrays(keys=keys, factors=factors, verbose=verbose)
         if rot is not None:
             rot_op = R.y(rot[1]) * R.x(rot[0])
@@ -980,15 +891,11 @@ class TNGGalaxy(SPHGalaxy):
 
 
 class ArepoGalaxy(TNGGalaxy):
-    """
-    An Arepo Galaxy parser (alias to TNGGalaxy)
-    """
+    """An Arepo Galaxy parser (alias to TNGGalaxy for now)."""
 
 
 class GasolineGalaxy(SPHGalaxy):
-    """
-    A Gasoline Galaxy parser
-    """
+    """A Gasoline Galaxy parser."""
 
 
 #     @staticmethod
@@ -1023,8 +930,7 @@ def indices_within_box(
     fraction: float = 1.0,
     verbose: bool = False,
 ) -> tuple[au.Quantity, list[au.Quantity]]:
-    """
-    Get particle indices within a box of given radius from the centre, e.g. half-mass radius.
+    """Get particle indices within a box of given radius from the centre, e.g. half-mass radius.
 
     Args:
         pos: Particle positions to be filtered.
@@ -1071,12 +977,11 @@ def indices_within_box(
 
 def strip_ap_units(
     *args,
-    mask: Optional[list] = None,
-    units: Optional[list[au.Unit]] = None,
+    mask: list | None = None,
+    units: list[au.Unit] | None = None,
     dtype: Any = np.float32,
 ) -> list:
-    """
-    Remove astropy units from data arrays or scalars.
+    """Remove astropy units from data arrays or scalars.
 
     Args:
         args: Data arrays or scalars with astropy units.
@@ -1098,7 +1003,6 @@ def strip_ap_units(
             if mask is not None:
                 arg_ls[i] = arg_ls[i][mask].astype(dtype)
     return arg_ls
-
 
 
 if __name__ == "__main__":
