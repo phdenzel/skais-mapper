@@ -29,7 +29,9 @@ classifiers = [
     "Operating System :: Unix",
     "Operating System :: POSIX :: Linux",
     "Operating System :: MacOS",
-    "Topic :: Security"]
+    "Topic :: Scientific/Engineering :: Image Processing",
+    "Topic :: Scientific/Engineering :: Astronomy",
+    ]
 
 dependencies = [
     "numpy",
