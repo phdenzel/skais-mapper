@@ -39,8 +39,8 @@ Also see ~pyproject.toml~ for the relevant python packages.
 
 ** Install
 
-It is recommended to install ~skais-mapper~ in a virtual environment via ~uv~. For
-this, run
+It is recommended to install ~skais-mapper~ in a virtual environment
+via ~uv~. For this, run
 
 #+begin_src shell
   uv sync
@@ -88,14 +88,17 @@ as follows:
 ** Data
 
 Currently, this framework is fully compatible with SPH data from the
-AREPO simulator, in particular the [[https://www.tng-project.org/data/][IllustrisTNG suite]].  It provides
-utility routines to fetch isolated halos from simulations snapshots
-and various raytracing algorithms for 2D column density projections of
-these halos and its galaxies.  The framework generates HDF5 files with
-image datasets of various galactic properties, such as dark matter,
-star, or gas column density distributions.
+AREPO simulator, in particular the
+[[https://www.tng-project.org/data/][IllustrisTNG suite]].  It
+provides utility routines to fetch isolated halos from simulations
+snapshots and various raytracing algorithms for 2D column density
+projections of these halos and its galaxies.  The framework generates
+HDF5 files with image datasets of various galactic properties, such as
+dark matter, star, or gas column density distributions.
 
 
 ** License
 
-`skais-mapper` is distributed under the terms of the [[https://spdx.org/licenses/GPL-3.0-or-later.html][GNU General Public License v3.0 or later]] license.
+~skais-mapper~ is distributed under the terms of the
+[[https://spdx.org/licenses/GPL-3.0-or-later.html][GNU General Public
+License v3.0 or later]] license.
