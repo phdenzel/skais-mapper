@@ -8,7 +8,7 @@
 [[https://www.gnu.org/licenses/gpl-3.0][https://img.shields.io/badge/License-GPL%20v3-blue.svg]]
 
 
-** Table of Contents
+*** Table of Contents
 
 - [[#requirements][Requirements]]
 - [[#install][Install]]
@@ -73,16 +73,25 @@ allows to create a development environment compatible with standard
 ~skais-mapper~ implements a few sub-commands for generating and
 manipulating simulation data.  Use the following to see what valid
 sub-commands exist:
-- ~[uv run] skais-mapper -h~
+
+#+begin_src shell
+[uv run] skais-mapper -h
+#+end_src
 
 ~skais-mapper~ sub-commands implement the hydra configuration
 management framework. For more information on sub-command usage,
 inspect the ~skais_mapper/configs/~ directory, or use:
-- ~[uv run] skais-mapper [sub-command] -h~
+
+#+begin_src shell
+[uv run] skais-mapper [sub-command] -h
+#+end_src
 
 For instance, the command to generate 1000 images from snapshot 50 is
 as follows:
-- ~[uv run] skais-mapper generate +experiment=tng50-1-50-2D-0000-1000~
+
+#+begin_src shell
+[uv run] skais-mapper generate +experiment=tng50-1-50-2D-0000-1000
+#+end_src
 
 
 ** Data
