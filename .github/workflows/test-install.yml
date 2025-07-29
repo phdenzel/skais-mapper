@@ -48,10 +48,9 @@ jobs:
 
       - name: Install 📦 and 👽️
         run: |
-          python -m pip install --upgrade pip build setuptools wheel numpy
+          python -m pip install --upgrade pip
           python -m pip install ruff pytest pytest-cov
-          python -m build
-          python -m pip install dist/skais_mapper-*.whl
+          python -m pip .
 
       - name: 🚨 with ruff
         if: ${{ inputs.lint }}
