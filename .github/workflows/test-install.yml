@@ -11,7 +11,7 @@ on:
       versions:
         description: "Test the installation on these Python versions"
         type: string
-        default: '["3.10", "3.11", "3.12", "3.13"]'
+        default: '["3.10", "3.11", "3.12"]'
         required: false
       lint:
         description: "Run linting using ruff"
