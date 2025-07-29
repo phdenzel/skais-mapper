@@ -1,6 +1,8 @@
-"""skais_mapper.illustris.snapshots module: Illustris simulation snapshot file i/o.
+# SPDX-FileCopyrightText: 2025-present Philipp Denzel <phdenzel@gmail.com>
+# SPDX-FileNotice: Part of skais-mapper
+# SPDX-License-Identifier: GPL-3.0-or-later
+"""Illustris simulation snapshot file i/o.
 
-@author: phdenzel
 Adapted from: https://github.com/illustristng/illustris_python
 """
 

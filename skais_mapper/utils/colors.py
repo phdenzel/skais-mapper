@@ -1,7 +1,7 @@
-"""skais_mapper.utils.colors module: Color module for more beautiful plots.
-
-@author: phdenzel
-"""
+# SPDX-FileCopyrightText: 2025-present Philipp Denzel <phdenzel@gmail.com>
+# SPDX-FileNotice: Part of skais-mapper
+# SPDX-License-Identifier: GPL-3.0-or-later
+"""Color module for more beautiful plots."""
 
 import random
 import numpy as np

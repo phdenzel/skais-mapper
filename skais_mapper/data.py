@@ -1,7 +1,7 @@
-"""skais_mapper.data module: Image/map data readers and writers.
-
-@author: phdenzel
-"""
+# SPDX-FileCopyrightText: 2025-present Philipp Denzel <phdenzel@gmail.com>
+# SPDX-FileNotice: Part of skais-mapper
+# SPDX-License-Identifier: GPL-3.0-or-later
+"""Image/map data readers and (HDF5) writers."""
 
 from pathlib import Path
 import warnings

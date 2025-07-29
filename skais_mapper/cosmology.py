@@ -1,8 +1,7 @@
-# pylint: disable=C0103
-"""skais_mapper.cosmology module: Utilities for handling cosmology-dependent calculations.
-
-@author: phdenzel
-"""
+# SPDX-FileCopyrightText: 2025-present Philipp Denzel <phdenzel@gmail.com>
+# SPDX-FileNotice: Part of skais-mapper
+# SPDX-License-Identifier: GPL-3.0-or-later
+"""Utilities for handling cosmology-dependent calculations."""
 
 from dataclasses import dataclass, field
 from functools import partial

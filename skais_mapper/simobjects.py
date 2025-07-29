@@ -1,8 +1,7 @@
-# pylint: disable=C0103
-"""skais_mapper.simobjects module: Classes representing data objects from simulations.
-
-@author: phdenzel
-"""
+# SPDX-FileCopyrightText: 2025-present Philipp Denzel <phdenzel@gmail.com>
+# SPDX-FileNotice: Part of skais-mapper
+# SPDX-License-Identifier: GPL-3.0-or-later
+"""Tools for manipulating data objects from simulations."""
 
 import time
 from pathlib import Path
@@ -1015,10 +1014,3 @@ if __name__ == "__main__":
     pprint.pprint(tng_src.data.keys())
     # dists = tng_src.kd_tree(k=8, threads=4)
     # print(dists.shape, dists)
-    # gal = read_illustris_galaxy(tng_path, tng_id, g_list[10], 'gas',
-    #                             fields=['Coordinates', 'CenterOfMass',
-    #                                     'InternalEnergy', 'ElectronAbundance',
-    #                                     'Velocities', 'Density', 'Masses'])
-    # gal2 = tng.groupcat.load_single(tng_path, tng_id, subhalo_id=g_list[10])
-    # print(gal2.keys())
-    # print(gal2['SubhaloGrNr'])

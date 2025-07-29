@@ -1,7 +1,7 @@
-"""skais_mapper.generate module: Map generation module.
-
-@author: phdenzel
-"""
+# SPDX-FileCopyrightText: 2025-present Philipp Denzel <phdenzel@gmail.com>
+# SPDX-FileNotice: Part of skais-mapper
+# SPDX-License-Identifier: GPL-3.0-or-later
+"""Generate maps from simulations."""
 
 from pathlib import Path
 import gc

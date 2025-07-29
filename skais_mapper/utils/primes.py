@@ -1,7 +1,7 @@
-"""skais_mapper.utils.primes module: Functions for testing and computing primes.
-
-@author: phdenzel
-"""
+# SPDX-FileCopyrightText: 2025-present Philipp Denzel <phdenzel@gmail.com>
+# SPDX-FileNotice: Part of skais-mapper
+# SPDX-License-Identifier: GPL-3.0-or-later
+"""Functions for checking and computing prime numbers."""
 
 __all__ = ["is_prime", "next_prime"]
 

@@ -1,7 +1,7 @@
-"""skais_mapper.plotting module: Plotting routines for maps and images.
-
-@author: phdenzel
-"""
+# SPDX-FileCopyrightText: 2025-present Philipp Denzel <phdenzel@gmail.com>
+# SPDX-FileNotice: Part of skais-mapper
+# SPDX-License-Identifier: GPL-3.0-or-later
+"""Plotting routines for maps and images."""
 
 from pathlib import Path
 import numpy as np

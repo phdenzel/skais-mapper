@@ -1,7 +1,8 @@
-# pylint: disable=W1401
-"""skais_mapper.illustris.util module: Illustris simulation snapshot utilities.
+# SPDX-FileCopyrightText: 2025-present Philipp Denzel <phdenzel@gmail.com>
+# SPDX-FileNotice: Part of skais-mapper
+# SPDX-License-Identifier: GPL-3.0-or-later
+"""Illustris simulation snapshot utilities.
 
-@author: phdenzel
 Adapted from: https://github.com/illustristng/illustris_python
 """
 
