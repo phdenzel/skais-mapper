@@ -25,8 +25,8 @@ __all__ = ["SPHGalaxy", "TNGGalaxy", "GasolineGalaxy"]
 class SPHGalaxy:
     """A generic base SPH Galaxy simulation parser."""
 
-    primary_hdf5_fields: dict[int, list[str]]
-    optional_hdf5_fields: dict[int, list[str]]
+    primary_hdf5_fields: dict[int, list[str]] = {0: [], 1: [], 4: []}
+    optional_hdf5_fields: dict[int, list[str]] = {0: [], 1: [], 4: []}
 
     def __init__(
         self,
@@ -63,13 +63,11 @@ class SPHGalaxy:
             particle_type = "gas"
         self._p_idx = tng.util.pidx_from_ptype(particle_type)
         self.data = self.load_data(as_float32=self.as_float32, verbose=verbose)
-
         self.ra = ra * au.deg
         self.dec = dec * au.deg
         self.distance = distance * au.Mpc
         self.peculiar_v = peculiar_v * au.km / au.s
         self.rotation = rotation
-
         if units:
             self.set_units(**units)
         self.verbose = verbose
@@ -77,18 +75,17 @@ class SPHGalaxy:
     @property
     def p_idx(self) -> int:
         """Particle index {0: 'gas', 1: 'dm', 2: 'tracers', 3: 'stars', 4: 'BHs'}."""
-        if not hasattr(self, "_p_idx"):
-            self._p_idx = 0
         return self._p_idx
 
     @p_idx.setter
     def p_idx(self, p_idx: int | str):
         """Setter for particle index."""
-        print("SPHGalaxy.p_idx.setter")
         if isinstance(p_idx, int):
             self._p_idx = p_idx
         elif isinstance(p_idx, str):
             self._p_idx = tng.util.pidx_from_ptype(p_idx)
+        else:
+            self._p_idx = 0
         # reload data
         self.load_data(as_float32=self.as_float32, verbose=self.verbose)
 
@@ -121,7 +118,7 @@ class SPHGalaxy:
         self.header["snapshot"]["UnitMass_in_g"] = 1.989e43
         return self.header
 
-    def load_cosmology(self, cosmo_pars: dict | None) -> dict:
+    def load_cosmology(self, cosmo_pars: dict | None, in_place: bool = True) -> dict:
         """Dummy method, to be overridden in subclasses.
 
         Returns:
@@ -131,30 +128,30 @@ class SPHGalaxy:
         """
         if cosmo_pars is None:
             cosmo_pars = {}
+        if in_place:
+            self.cosmology = CosmoModel(**cosmo_pars)
         return cosmo_pars
 
-    def angular_distance(self, eps: float = 1e-4):
+    def angular_distance(self, eps: float = 1e-4) -> float:
         """Calculate the angular distance of the simulation at the given redshift.
 
         Args:
             eps: minimum cutoff value for the redshift
         """
         z = self.cosmology.z
-        if z < eps:
-            z += eps
+        z += eps if z < eps else 0
         dz = self.cosmology.d_z(z, cosmo_model=self.cosmology, scaled=False)
         dang = self.cosmology.d_z2kpc(dz, cosmo_model=self.cosmology)
         return dang
 
-    def angular_resolution(self, eps: float = 1e-4):
+    def angular_resolution(self, eps: float = 1e-4) -> tuple[float, float]:
         """Calculate the angular scale of the simulation at the given redshift.
 
         Args:
             eps: minimum cutoff value for the redshift
         """
         z = self.cosmology.z
-        if z < eps:
-            z += eps
+        z += eps if z < eps else 0
         dz = self.cosmology.d_z(z, cosmo_model=self.cosmology, scaled=True)
         arcsec2kpc = self.cosmology.arcsec2kpc(z, dz)
         return 1.0 / arcsec2kpc.to(au.kpc / au.deg), z
@@ -165,7 +162,7 @@ class SPHGalaxy:
         if not hasattr(self, "header"):
             self.header = self.load_header()
         L = self.units("l/h")
-        box = self.header["snapshot"].get("BoxSize", -1) * L
+        box = self.header["snapshot"].get("BoxSize", 1) * L
         return box.to(au.kpc)
 
     def units(self, u: str) -> au.Quantity:
@@ -260,8 +257,8 @@ class SPHGalaxy:
         if not hasattr(self, "header"):
             self.header = self.load_header()
         h = self.header["snapshot"]
-        if "UnitMass_in_cm_per_s" in h:
-            velocity = h["UnitMass_in_cm_per_s"] * au.cm / au.s
+        if "UnitVelocity_in_cm_per_s" in h:
+            velocity = h["UnitVelocity_in_cm_per_s"] * au.cm / au.s
         else:
             velocity = 1e5 * au.cm / au.s
         if self.as_float32:
@@ -278,7 +275,6 @@ class SPHGalaxy:
                 - optionally 'CenterOfMass', 'GFM_Metals' (axis 1 should contain
                   hydrogen gas fractions), 'NeutralHydrogenAbundance'
         """
-        print("SPHGalaxy.load_data()")
         kwargs.setdefault(
             "fields",
             self.primary_hdf5_fields[self.p_idx] + self.optional_hdf5_fields[self.p_idx],
@@ -520,10 +516,13 @@ class TNGGalaxy(SPHGalaxy):
         if hasattr(self, "_halo_index") and self._halo_index == index:
             return
         self._halo_index = index
-        if hasattr(self, "subhalo"):
-            self.subhalo = self.load_subhalo(index)
-        if hasattr(self, "data"):
-            self.data = self.load_data(as_float32=self.as_float32, verbose=self.verbose)
+
+        self.subhalo = self.load_subhalo(index) if hasattr(self, "subhalo") else None
+        self.data = (
+            self.load_data(as_float32=self.as_float32, verbose=self.verbose)
+            if hasattr(self, "data")
+            else None
+        )
 
     @SPHGalaxy.p_idx.setter
     def p_idx(self, p_idx: int | str):
@@ -542,27 +541,27 @@ class TNGGalaxy(SPHGalaxy):
         header["snapshot"] = tng.snapshots.load_header(self.base_path, self.snapshot)
         return header
 
-    def load_cosmology(self, cosmo_pars: dict | None) -> dict:
+    def load_cosmology(self, cosmo_pars: dict | None = None, in_place: bool = True) -> dict:
         """Load the cosmological parameters from the header dictionary.
 
         Note: This overrides the parent class method.
 
         Args:
             cosmo_pars: The default dictionary for the CosmoModel dataclass.
+            in_place: Load CosmoModel into instanace property `cosmology` directly.
 
         Returns:
             (dict): a dictionary with cosmological parameters pulled the header.
         """
-        if cosmo_pars is None:
-            cosmo_pars = {}
-        cosmo_pars["omega_l"] = self.header["snapshot"].get("OmegaLambda", 0.6911)
-        cosmo_pars["omega_m"] = self.header["snapshot"].get("Omega0", 0.3089)
-        cosmo_pars["omega_k"] = self.header["snapshot"].get("OmegaK", 0)
-        cosmo_pars["z"] = self.header["snapshot"].get("Redshift", None)
-        if cosmo_pars["z"] is None:
-            a = self.header["snapshot"].get("Time", None)
-            cosmo_pars["z"] = 1.0 / a - 1
-        cosmo_pars["h"] = self.header["snapshot"].get("HubbleParam", 0.6774)
+        cosmo_pars = {} if cosmo_pars is None else cosmo_pars
+        cosmo_pars.setdefault("omega_l", self.header["snapshot"].get("OmegaLambda", 0.6911))
+        cosmo_pars.setdefault("omega_m", self.header["snapshot"].get("Omega0", 0.3089))
+        cosmo_pars.setdefault("omega_k", self.header["snapshot"].get("OmegaK", 0))
+        cosmo_pars.setdefault("z", self.header["snapshot"].get("Redshift", None))
+        cosmo_pars.setdefault("z", 1. / self.header["snapshot"].get("Time", 1) - 1)
+        cosmo_pars.setdefault("h", self.header["snapshot"].get("HubbleParam", 0.6774))
+        if in_place:
+            self.cosmology = CosmoModel(**cosmo_pars)
         return cosmo_pars
 
     @staticmethod
@@ -589,9 +588,7 @@ class TNGGalaxy(SPHGalaxy):
         if verbose:
             print(f"Searching group catalog: snapshot {snapshot}")
         galaxy_list = tng.groupcat.load_halos(base_path, snapshot, as_array=True, **kwargs)
-        if filtered:
-            msk = galaxy_list >= 0
-            galaxy_list = galaxy_list[msk]
+        galaxy_list = galaxy_list[galaxy_list >= 0] if filtered else galaxy_list
         if verbose:
             N_g = galaxy_list.max()
             N_g += 0 in galaxy_list
