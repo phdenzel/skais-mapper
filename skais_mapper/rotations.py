@@ -34,12 +34,7 @@ class R:
         """
         if self.omega is None:
             self.omega = self._x(0)
-        # if isinstance(arr, (pb.snapshot.SimSnap, pb.snapshot.SubSnap, pb.array.SimArray)):
-        #     for k in arr.keys():
-        #         karr = arr[k]
-        #         if len(karr.shape) == 2 and karr.shape[1] == 3:
-        #             arr[k] = np.dot(self.omega, karr.transpose()).transpose()
-        arr = np.dot(self.omega, arr.transpose()).transpose()
+        arr = arr @ self.omega.transpose()
         return arr
 
     def __mul__(self, other: Self):
@@ -51,7 +46,7 @@ class R:
         Returns:
             obj: a new instance of R
         """
-        return self.__class__(self.omega * other.omega)
+        return self.__class__(self.omega @ other.omega)
 
     @classmethod
     def x(cls, theta: float, degrees: bool = True):
@@ -96,7 +91,7 @@ class R:
         """
         if degrees:
             theta *= np.pi / 180.0
-        return np.matrix(
+        return np.array(
             [
                 [1, 0, 0],
                 [0, np.cos(theta), -np.sin(theta)],
@@ -114,7 +109,7 @@ class R:
         """
         if degrees:
             theta *= np.pi / 180.0
-        return np.matrix(
+        return np.array(
             [
                 [np.cos(theta), 0, np.sin(theta)],
                 [0, 1, 0],
@@ -132,7 +127,7 @@ class R:
         """
         if degrees:
             theta *= np.pi / 180.0
-        return np.matrix(
+        return np.array(
             [
                 [0, np.cos(theta), -np.sin(theta)],
                 [0, np.sin(theta), np.cos(theta)],
