@@ -51,6 +51,7 @@ jobs:
           python -m pip install --upgrade pip build setuptools wheel numpy
           python -m pip install ruff pytest pytest-cov
           python -m build
+          unzip -l dist/skais_mapper-0.1.0-*.whl | grep raytrace
           python -m pip install dist/skais_mapper-*.whl
 
       - name: 🚨 with ruff
