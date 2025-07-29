@@ -51,7 +51,6 @@ jobs:
           python -m pip install --upgrade pip build setuptools wheel numpy
           python -m pip install ruff pytest pytest-cov
           python -m build
-          unzip -l dist/skais_mapper-0.1.0-*.whl | grep raytrace
           python -m pip install dist/skais_mapper-*.whl
 
       - name: 🚨 with ruff
@@ -65,7 +64,7 @@ jobs:
       - name: 🧪 with pytest
         if: ${{ inputs.pytest }}
         run: |
-          pytest --cov --junitxml=junit/${{ inputs.artifact-name }}-${{ matrix.python-version }}.xml -o junit_family=legacy
+          pytest --import-mode=importlib --cov --junitxml=junit/${{ inputs.artifact-name }}-${{ matrix.python-version }}.xml -o junit_family=legacy
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
