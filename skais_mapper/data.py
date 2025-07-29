@@ -1,8 +1,7 @@
-"""
-skais_mapper.data module
-
-@author: phdenzel
-"""
+# SPDX-FileCopyrightText: 2025-present Philipp Denzel <phdenzel@gmail.com>
+# SPDX-FileNotice: Part of skais-mapper
+# SPDX-License-Identifier: GPL-3.0-or-later
+"""Image/map data readers and (HDF5) writers."""
 
 from pathlib import Path
 import warnings
@@ -22,7 +21,7 @@ class ImgRead:
         paths: str | Path | list[str | Path] | None = None,
         squash: bool = True,
         pad_val: int | float = 0,
-        **kwargs
+        **kwargs,
     ) -> np.ndarray:
         """Automatically determine file type and read data appropriately.
 
@@ -48,11 +47,11 @@ class ImgRead:
         filepath = Path(paths) if paths is not None else Path("")
         # print("Filepath", filepath)
         match filepath.suffix:
-            case '.npy':
+            case ".npy":
                 return self._read_npy(filepath, **kwargs)
-            case '.jpg':
+            case ".jpg":
                 return self._read_jpg(filepath, **kwargs)
-            case '.png':
+            case ".png":
                 return self._read_png(filepath, **kwargs)
             case _:
                 return None
@@ -71,8 +70,8 @@ class ImgRead:
         max_shape = np.max([d.shape for d in data], axis=0)
         padded = []
         for arr in data:
-            pad_width = [(0, maxd-currd) for currd, maxd in zip(arr.shape, max_shape)]
-            parr = np.pad(arr, pad_width, mode='constant', constant_values=pad_val)
+            pad_width = [(0, maxd - currd) for currd, maxd in zip(arr.shape, max_shape)]
+            parr = np.pad(arr, pad_width, mode="constant", constant_values=pad_val)
             padded.append(parr)
         return np.concatenate(padded)
 
@@ -98,7 +97,7 @@ class ImgRead:
             (FileNotFoundError): if the input file path does not exist
         """
         filepath = Path(path)
-        kwargs.setdefault('mmap_mode', None)
+        kwargs.setdefault("mmap_mode", None)
         if not filepath.exists():
             raise FileNotFoundError(f"File {str(filepath)} does not exist.")
         data_array = np.load(filepath, **kwargs)
@@ -179,6 +178,7 @@ class Img2H5Buffer:
 
     Note: by default the entire dataset is loaded into cache
     """
+
     default_target_name = "{}.hdf5"
     extensions = [".jpg", ".png", ".npy"]
 
@@ -236,8 +236,7 @@ class Img2H5Buffer:
 
     @staticmethod
     def glob_path(
-        path: str | Path | list[str] | list[Path],
-        extensions: str | list[str] = None
+        path: str | Path | list[str] | list[Path], extensions: str | list[str] = None
     ) -> list[Path]:
         """Glob path recursively for files.
 
@@ -270,31 +269,32 @@ class Img2H5Buffer:
 
     @property
     def nbytes(self) -> list["nbytes"]:
-        """
-        List of the number of bytes for each buffer file
-        """
+        """List of the number of bytes for each buffer file."""
         if self.files:
             return [nbytes(f.stat().st_size) for f in self.files]
         return [nbytes(0)]
 
     @property
     def total_nbytes(self) -> list["nbytes"]:
-        """
-        Total number of bytes for buffer
-        """
+        """Total number of bytes for buffer."""
         return sum(self.nbytes)
 
     def __str__(self):
         """String representation of the instance."""
-        return (f"{self.__class__.__name__}(#b{len(self.queue)}#f{self.n_files}:{self.total_nbytes.as_str()}"
-                f"@{self.cache_size.as_str()}->{self.target.name})")
+        return (
+            f"{self.__class__.__name__}("
+            f"#b{len(self.queue)}#f{self.n_files}"
+            f":{self.total_nbytes.as_str()}"
+            f"@{self.cache_size.as_str()}->{self.target.name}"
+            ")"
+        )
 
     def configure_rdcc(
         self,
         cache_size: int | float | str | None = None,
         f: int = 10,
         verbose: bool = False,
-        **kwargs
+        **kwargs,
     ) -> dict:
         """Automatically configure HDF5 data chunking for optimal writing.
 
@@ -327,9 +327,11 @@ class Img2H5Buffer:
         slots_size = max(self.nbytes) if self.nbytes else nbytes("2M")
         n_slots = int(cache_size / slots_size) if self.n_files else 100_000
         # avoid calculating prime numbers if previous configuration looks similar
-        if hasattr(self, "_rdcc") \
-           and self._rdcc["rdcc_nbytes"] == int(cache_size) \
-           and self._rdcc["rdcc_w0"] == kwargs.get("rdcc_w0", 1.0):
+        if (
+            hasattr(self, "_rdcc")
+            and self._rdcc["rdcc_nbytes"] == int(cache_size)
+            and self._rdcc["rdcc_w0"] == kwargs.get("rdcc_w0", 1.0)
+        ):
             return self._rdcc
         kwargs.setdefault("rdcc_nbytes", int(cache_size))
         kwargs.setdefault("rdcc_w0", 1.0)
@@ -415,7 +417,7 @@ class Img2H5Buffer:
         return None
 
     def store(
-            self, data: np.ndarray | dict | str | Path | list[str | Path], squash: bool = True
+        self, data: np.ndarray | dict | str | Path | list[str | Path], squash: bool = True
     ) -> "Img2H5Buffer":
         """Insert data into the buffer queue.
 
@@ -423,16 +425,21 @@ class Img2H5Buffer:
             data: Data to be stored in buffer.
             squash: Squash data dimensions if buffer data is compatible.
         """
-        if squash and isinstance(data, np.ndarray) \
-           and self.queue and isinstance(self.queue[-1], np.ndarray):
+        if (
+            squash
+            and isinstance(data, np.ndarray)
+            and self.queue
+            and isinstance(self.queue[-1], np.ndarray)
+        ):
             try:
                 self.queue[-1] = np.concatenate((self.queue[-1], data))
             except ValueError:
                 self.queue[-1] = ImgRead._stack_max_expand([self.queue[-1], data])
         elif isinstance(data, np.ndarray | dict):
             self.queue.append(data)
-        elif isinstance(data, str | Path) \
-             or (isinstance(data, list) and isinstance(data[0], str | Path)):
+        elif isinstance(data, str | Path) or (
+            isinstance(data, list) and isinstance(data[0], str | Path)
+        ):
             return self.store(ImgRead()(data))
         return self
 
@@ -527,7 +534,8 @@ class Img2H5Buffer:
                 if verbose:
                     print(
                         f"Data attribute(s) {tuple(data.keys())} have been "
-                        f"written to HDF5 file@[/{group}]")
+                        f"written to HDF5 file@[/{group}]"
+                    )
         # write data
         elif isinstance(data, np.ndarray):
             file_kwargs, kwargs = self._h5py_file_kwargs(
@@ -545,8 +553,8 @@ class Img2H5Buffer:
                     "track_times": True,
                     "dtype": data.dtype,
                     "shape": data.shape,
-                    "maxshape": data.shape[:axis] + (None,) + data.shape[axis+1:],
-                    "chunks": data.shape[:axis] + (1,) + data.shape[axis+1:],
+                    "maxshape": data.shape[:axis] + (None,) + data.shape[axis + 1 :],
+                    "chunks": data.shape[:axis] + (1,) + data.shape[axis + 1 :],
                 },
             )
             with h5py.File(path, **file_kwargs, **rdcc) as h5:
@@ -558,23 +566,24 @@ class Img2H5Buffer:
                     self.index = 0
                 elif overwrite is None:
                     self.index = ds_samples
-                    ds.resize(self.index+data_samples, axis=axis)
+                    ds.resize(self.index + data_samples, axis=axis)
                 else:
                     self.index = overwrite
                     if data_samples > ds_samples:
-                        ds.resize(self.index+data_samples, axis=axis)
+                        ds.resize(self.index + data_samples, axis=axis)
                 slc = [slice(None)] * len(ds.shape)
-                slc[axis] = slice(self.index, self.index+data_samples)
+                slc[axis] = slice(self.index, self.index + data_samples)
                 ds[tuple(slc)] = data
                 if verbose:
-                    print(f"Data {data.shape} have been written to HDF5 dataset "
-                          f"{ds.shape}@({self.index}:{self.index+data_samples})")
+                    print(
+                        f"Data {data.shape} have been written to HDF5 dataset "
+                        f"{ds.shape}@({self.index}:{self.index + data_samples})"
+                    )
         else:
             warnings.warn(
                 "Img2H5Buffer did not write data to file (either "
                 "because the buffer was empty or data was incompatible)."
             )
-
 
     def write(
         self,
@@ -582,7 +591,7 @@ class Img2H5Buffer:
         group: str = "images",
         data: np.ndarray | dict | None = None,
         verbose: bool = False,
-        **kwargs
+        **kwargs,
     ):
         """Write all files in buffer to a new HDF5 file.
 
@@ -602,19 +611,19 @@ class Img2H5Buffer:
 if __name__ == "__main__":
     # test Img2H5Buffer
     for img2h5 in [
-            Img2H5Buffer(
-                target="/scratch/data/illustris/tng50-1.2D/test_250601_empty.hdf5",
-                data=np.random.rand(100, 512, 512)
-            ),
-            Img2H5Buffer(
-                "/scratch/data/illustris/tng50-1.2D/099/dm/dm_tng50-1.99.gid.0003*.png",
-                "/scratch/data/illustris/tng50-1.2D/test_250601_png.hdf5"
-            ),
-            Img2H5Buffer(
-                "/scratch/data/illustris/tng50-1.2D/099/dm/**/dm_tng50-1.99.gid.0003*.npy",
-                "/scratch/data/illustris/tng50-1.2D/test_250601_npy.hdf5",
-                data=np.random.rand(1, 512, 512)
-            )
+        Img2H5Buffer(
+            target="/scratch/data/illustris/tng50-1.2D/test_250601_empty.hdf5",
+            data=np.random.rand(100, 512, 512),
+        ),
+        Img2H5Buffer(
+            "/scratch/data/illustris/tng50-1.2D/099/dm/dm_tng50-1.99.gid.0003*.png",
+            "/scratch/data/illustris/tng50-1.2D/test_250601_png.hdf5",
+        ),
+        Img2H5Buffer(
+            "/scratch/data/illustris/tng50-1.2D/099/dm/**/dm_tng50-1.99.gid.0003*.npy",
+            "/scratch/data/illustris/tng50-1.2D/test_250601_npy.hdf5",
+            data=np.random.rand(1, 512, 512),
+        ),
     ]:
         print()
         print(img2h5)
@@ -636,8 +645,8 @@ if __name__ == "__main__":
     # clean up
     if 0:
         for f in [
-                "/scratch/data/illustris/tng50-1.2D/test_250601_empty.hdf5",
-                "/scratch/data/illustris/tng50-1.2D/test_250601_png.hdf5",
-                "/scratch/data/illustris/tng50-1.2D/test_250601_npy.hdf5",
+            "/scratch/data/illustris/tng50-1.2D/test_250601_empty.hdf5",
+            "/scratch/data/illustris/tng50-1.2D/test_250601_png.hdf5",
+            "/scratch/data/illustris/tng50-1.2D/test_250601_npy.hdf5",
         ]:
             Path(f).unlink(missing_ok=True)

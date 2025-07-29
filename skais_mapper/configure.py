@@ -1,8 +1,7 @@
-"""
-skais_mapper.configure module: Create configuration files
-
-@author: phdenzel
-"""
+# SPDX-FileCopyrightText: 2025-present Philipp Denzel <phdenzel@gmail.com>
+# SPDX-FileNotice: Part of skais-mapper
+# SPDX-License-Identifier: GPL-3.0-or-later
+"""Inspect and create configuration files."""
 
 import logging
 from pathlib import Path

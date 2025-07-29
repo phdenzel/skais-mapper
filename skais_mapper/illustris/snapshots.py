@@ -1,12 +1,12 @@
-"""
-skais_mapper.illustris.snapshots module: Illustris simulation snapshot file i/o
+# SPDX-FileCopyrightText: 2025-present Philipp Denzel <phdenzel@gmail.com>
+# SPDX-FileNotice: Part of skais-mapper
+# SPDX-License-Identifier: GPL-3.0-or-later
+"""Illustris simulation snapshot file i/o.
 
-@author: phdenzel
 Adapted from: https://github.com/illustristng/illustris_python
 """
 
 import os
-from typing import Optional
 import numpy as np
 from tqdm import trange
 from skais_mapper.illustris.util import IllustrisH5File, pidx_from_ptype
@@ -17,7 +17,7 @@ from skais_mapper.illustris.groupcat import get_offset_path
 
 
 def get_path(base_path: str, snapshot: int, partition: int = 0) -> str:
-    """Get absolute path to a snapshot HDF5 file (modify as needed)
+    """Get absolute path to a snapshot HDF5 file (modify as needed).
 
     Args:
         base_path: Base path to the Illustris(TNG) snapshots.
@@ -57,9 +57,9 @@ def load_snapshot(
     base_path: str,
     snapshot: int,
     ptype: str,
-    fields: Optional[list[str] | str] = None,
-    mdi: Optional[list[int] | int] = None,
-    subset: Optional[dict] = None,
+    fields: list[str] | str | None = None,
+    mdi: list[int] | int | None = None,
+    subset: dict | None = None,
     as_float32: bool = False,
     as_array: bool = True,
     with_pbar: bool = True,
@@ -93,7 +93,7 @@ def load_snapshot(
     key = "PartType" + str(p_idx)
     if fields is None:
         fields = []
-    elif isinstance(fields, (str, bytes)):
+    elif isinstance(fields, str | bytes):
         fields = [fields]
     if mdi is None:
         mdi = []
@@ -347,8 +347,8 @@ def find_group_in_partitions(base_path: str, snapshot: int, key: str) -> h5py.Fi
 if __name__ == "__main__":
     # TODO: unittest
     IllustrisH5File.path_func = get_path
-    tng_dir = "/data/procomp/Illustris/tng50-1"
-    snap_id = 50
+    tng_dir = "/scratch/data/illustris/tng50-1"
+    snap_id = 99
 
     # test getting a file path
     print("# Test getting a file path")

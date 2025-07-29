@@ -1,13 +1,12 @@
-"""
-skais_mapper.utils.helper module: Helper functions and other stuff
-
-@author: phdenzel
-"""
+# SPDX-FileCopyrightText: 2025-present Philipp Denzel <phdenzel@gmail.com>
+# SPDX-FileNotice: Part of skais-mapper
+# SPDX-License-Identifier: GPL-3.0-or-later
+"""Generic helper functions and other stuff."""
 
 import datetime
 import base64
 import lzma
-from typing import Callable
+from collections.abc import Callable
 import functools
 
 
@@ -54,7 +53,7 @@ def extract_decode(string: str) -> str:
 
 
 def alias_kw(key: str, alias: str) -> Callable:
-    """Decorator for aliasing a keyword argument in a function
+    """Decorator for aliasing a keyword argument in a function.
 
     Args:
         key: Name of keyword argument in function to alias
