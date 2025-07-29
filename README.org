@@ -3,6 +3,21 @@
 #+DATE: 2022-09-06 Tue
 #+OPTIONS: author:nil title:t date:nil timestamp:nil toc:nil num:nil \n:nil
 
+[[https://pypi.org/project/skais-mapper][https://img.shields.io/pypi/v/skais-mapper.svg]]
+[[https://pypi.org/project/skais-mapper][https://img.shields.io/pypi/pyversions/skais-mapper.svg]]
+[[https://www.gnu.org/licenses/gpl-3.0][https://img.shields.io/badge/License-GPL%20v3-blue.svg]]
+
+
+** Table of Contents
+
+- [[#requirements][Requirements]]
+- [[#install][Install]]
+- [[#usage][Usage]]
+- [[#data][Data]]
+- [[#license][License]]
+
+
+
 ~skais-mapper~ is a tool for generating, plotting, and pre-processing
 hydrodynamics simulation (image) data for state-of-the-art generative
 AI models.
@@ -69,6 +84,7 @@ For instance, the command to generate 1000 images from snapshot 50 is
 as follows:
 - ~[uv run] skais-mapper generate +experiment=tng50-1-50-2D-0000-1000~
 
+
 ** Data
 
 Currently, this framework is fully compatible with SPH data from the
@@ -78,3 +94,8 @@ and various raytracing algorithms for 2D column density projections of
 these halos and its galaxies.  The framework generates HDF5 files with
 image datasets of various galactic properties, such as dark matter,
 star, or gas column density distributions.
+
+
+** License
+
+`skais-mapper` is distributed under the terms of the [[https://spdx.org/licenses/GPL-3.0-or-later.html][GNU General Public License v3.0 or later]] license.
