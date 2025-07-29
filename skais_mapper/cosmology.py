@@ -11,6 +11,7 @@ import numpy as np
 from scipy.integrate import solve_ivp
 from astropy import units as au
 from astropy import constants as ac
+from typing import Self
 
 
 @dataclass
@@ -116,7 +117,7 @@ class CosmoModel:
         )
 
     @staticmethod
-    def d_comov(a: float, r: float, cosmo_model: "CosmoModel" | None = None) -> au.Quantity:
+    def d_comov(a: float, r: float, cosmo_model: Self | None = None) -> au.Quantity:
         """Calculate the comoving distance from scale factor (for solve_ivp).
 
         Args:
@@ -134,7 +135,7 @@ class CosmoModel:
     @staticmethod
     def d_z(
         z: float | None = None,
-        cosmo_model: "CosmoModel" | None = None,
+        cosmo_model: Self | None = None,
         scaled: bool = False,
     ) -> au.Quantity:
         """Angular distance d_z from a redshift z within given cosmology.
@@ -168,7 +169,7 @@ class CosmoModel:
 
     @staticmethod
     def d_z2kpc(
-        distance: float | np.ndarray, cosmo_model: "CosmoModel" | None = None
+        distance: float | np.ndarray, cosmo_model: Self | None = None
     ) -> au.Quantity:
         """Given scale-less distance d, return scaled distance c/H0 * d [kpc].
 
@@ -186,7 +187,7 @@ class CosmoModel:
     def arcsec2kpc(
         z: float,
         dist_z: float | None = None,
-        cosmo_model: "CosmoModel" | None = None,
+        cosmo_model: Self | None = None,
     ) -> au.Quantity:
         """Angular distance d_z from a redshift z within given cosmology.
 
