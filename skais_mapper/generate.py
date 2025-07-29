@@ -1,8 +1,7 @@
-"""
-skais_mapper.generate module: Map generation module.
-
-@author: phdenzel
-"""
+# SPDX-FileCopyrightText: 2025-present Philipp Denzel <phdenzel@gmail.com>
+# SPDX-FileNotice: Part of skais-mapper
+# SPDX-License-Identifier: GPL-3.0-or-later
+"""Generate maps from simulations."""
 
 from pathlib import Path
 import gc
@@ -20,7 +19,8 @@ from astropy import units as au
 # from astropy.visualization import ImageNormalize, MinMaxInterval
 # from astropy.visualization import AsinhStretch
 # from astropy.visualization import LogStretch
-from typing import Optional, Any, Iterable
+from typing import Any
+from collections.abc import Iterable
 import skais_mapper
 from skais_mapper.utils import get_run_id, compress_encode
 from skais_mapper.data import Img2H5Buffer
@@ -34,15 +34,15 @@ def map_TNG_sample(
     gid: int,
     group: str = "gas",
     projected_unit: au.Unit = None,
-    cmap: Optional[Colormap] = None,
-    hdf5_file: Optional[str | Path] = None,
+    cmap: Colormap | None = None,
+    hdf5_file: str | Path | None = None,
     hdf5_save: bool = True,
     npy_save: bool = False,
     png_save: bool = False,
     subdir_save: bool = False,
     grid_size: int = 512,
     fh: float = 3,
-    rot: Optional[list[float] | tuple[float, float]] = None,
+    rot: list[float] | tuple[float, float] | None = None,
     xaxis: int = 0,
     yaxis: int = 1,
     periodic: bool = False,
@@ -152,7 +152,7 @@ def map_TNG_sample(
         kwargs["keys"] = ["particle_positions", "masses", "radii", "center"]
         if projected_unit is None:
             projected_unit = au.Msun / au.kpc**2
-    if isinstance(kwargs["keys"][1], (tuple, list)):
+    if isinstance(kwargs["keys"][1], tuple | list):
         keys = kwargs.pop("keys")
         quantity, extent, N = obj.generate_map(keys=keys, **kwargs)
         keys[1] = keys[1][0]
@@ -244,23 +244,22 @@ def map_TNG_sample(
 def map_TNG_galaxies(
     snapshots: list[int],
     gids: int | Iterable[int],
-    groups: Optional[list[str]] = None,
-    output: Optional[str] = None,
-    src_dir: Optional[str] = None,
+    groups: list[str] | None = None,
+    output: str | None = None,
+    src_dir: str | None = None,
     sim_type: str = "illustris/tng50-1",
-    part_max: Optional[int] = None,
-    part_min: Optional[int] = 20_000,
-    retries: Optional[int] = None,
-    subfind_limit: Optional[int] = 15_000,
+    part_max: int | None = None,
+    part_min: int | None = 20_000,
+    retries: int | None = None,
+    subfind_limit: int | None = 15_000,
     grid_size: int = 512,
-    rotations: Optional[np.ndarray] = None,
+    rotations: np.ndarray | None = None,
     random_rotations: bool = True,
     rng_seed: int = 42,
     dry_run: bool = False,
     verbose: bool = True,
 ):
-    """
-    Generate any number of maps from an IllustrisTNG snapshot(s).
+    """Generate any number of maps from an IllustrisTNG snapshot(s).
 
     Args:
         snapshots: Snapshots number of the IllustrisTNG run.

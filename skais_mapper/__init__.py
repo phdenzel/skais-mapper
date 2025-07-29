@@ -1,8 +1,7 @@
-"""
-skais_mapper module
-
-@author: phdenzel
-"""
+# SPDX-FileCopyrightText: 2025-present Philipp Denzel <phdenzel@gmail.com>
+# SPDX-FileNotice: Part of skais-mapper
+# SPDX-License-Identifier: GPL-3.0-or-later
+"""The main module: sets global variables and registers OmegaConf resolvers."""
 
 import uuid
 import git

@@ -1,9 +1,8 @@
 #!/usr/bin/env python
-"""
-skais_mapper.__main__ entry points
-
-@author: phdenzel
-"""
+# SPDX-FileCopyrightText: 2025-present Philipp Denzel <phdenzel@gmail.com>
+# SPDX-FileNotice: Part of skais-mapper
+# SPDX-License-Identifier: GPL-3.0-or-later
+"""skais-mapper entry points: configure [or conf|c], generate [or gen|g], help [or h]."""
 
 import sys
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
@@ -59,4 +58,4 @@ def main():
 
 
 if __name__ == "__main__":
-    generate()
+    main()

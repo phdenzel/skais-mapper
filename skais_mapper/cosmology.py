@@ -1,24 +1,21 @@
-# pylint: disable=C0103
-"""
-skais_mapper.cosmology module
-
-@author: phdenzel
-"""
+# SPDX-FileCopyrightText: 2025-present Philipp Denzel <phdenzel@gmail.com>
+# SPDX-FileNotice: Part of skais-mapper
+# SPDX-License-Identifier: GPL-3.0-or-later
+"""Utilities for handling cosmology-dependent calculations."""
 
 from dataclasses import dataclass, field
 from functools import partial
-from typing import Optional
 
 import numpy as np
 from scipy.integrate import solve_ivp
 from astropy import units as au
 from astropy import constants as ac
+from typing import Self
 
 
 @dataclass
 class CosmoModel:
-    """
-    Set cosmological parameter for distance calculations, mass projections, etc.
+    """Set cosmological parameter for distance calculations, mass projections, etc.
 
     Args:
         omega_m (float): matter energy fraction
@@ -35,16 +32,14 @@ class CosmoModel:
     omega_l: float = 0.72
     omega_k: float = 0.0
     # omega_r: float = field(init=False, default=None, hash=False)
-    _omega_r: Optional[float] = field(init=False, default=None, hash=False)
+    _omega_r: float | None = field(init=False, default=None, hash=False)
     z: float = 0.0
     c: ac.Constant = field(default_factory=lambda: ac.c)
     h: float = 0.718
     u_H0: au.CompositeUnit = au.km / au.s / au.Mpc
 
     def __str__(self) -> str:
-        """
-        Instance string representation
-        """
+        """Instance string representation."""
         return (
             f"<CosmoModel[Ω_m:{self.omega_m:2.6f} Ω_l:{self.omega_l:2.6f} "
             f"Ω_k:{self.omega_k:2.6f} Ω_r:{self.omega_r:2.6f} "
@@ -52,25 +47,19 @@ class CosmoModel:
         )
 
     def __repr__(self) -> str:
-        """
-        Instance string representation
-        """
+        """Instance string representation."""
         return self.__str__()
 
     @property
     def omega_r(self) -> float:
-        """
-        The radiation density parameter getter
-        """
+        """The radiation density parameter getter."""
         if self._omega_r is None:
             self._omega_r = (1 + self.omega_k) - self.omega_m - self.omega_l
         return self._omega_r
 
     @omega_r.setter
-    def omega_r(self, r: Optional[float]):
-        """
-        The radiation density parameter setter
-        """
+    def omega_r(self, r: float | None):
+        """The radiation density parameter setter."""
         if r is None:
             r = (1 + self.omega_k) - self.omega_m - self.omega_l
         if isinstance(r, property):
@@ -79,45 +68,34 @@ class CosmoModel:
 
     @property
     def a(self) -> float:
-        """
-        The scale parameter getter
-        """
+        """The scale parameter getter."""
         if self.z:
             return 1.0 / (1 + self.z)
         return 1.0  # default: z = 0
 
     @a.setter
     def a(self, a: float):
-        """
-        The scale parameter setter
-        """
+        """The scale parameter setter."""
         self.z = (1.0 / a) - 1
 
     @property
     def rho_crit(self) -> au.Quantity:
-        """
-        The critical density getter
-        """
+        """The critical density getter."""
         H0 = self.H0
         return (3 * H0**2 / (8 * np.pi * ac.G)).to(au.Msun * au.Mpc ** (-3))
 
     @property
     def H0(self) -> au.Quantity:
-        """
-        The Hubble constant getter
-        """
+        """The Hubble constant getter."""
         return self.h * 1e2 * self.u_H0
 
     @H0.setter
     def H0(self, H0: au.Quantity):
-        """
-        The Hubble constant setter
-        """
+        """The Hubble constant setter."""
         self.h = H0 / (1e2 * self.u_H0)
 
-    def H(self, a: Optional[float] = None) -> au.Quantity:
-        """
-        The Hubble parameter at a given scale factor a
+    def H(self, a: float | None = None) -> au.Quantity:
+        """The Hubble parameter at a given scale factor `a`.
 
         Args:
             a: scale factor
@@ -138,9 +116,8 @@ class CosmoModel:
         )
 
     @staticmethod
-    def d_comov(a: float, r: float, cosmo_model: Optional["CosmoModel"] = None) -> au.Quantity:
-        """
-        Calculate the comoving distance from scale factor (for solve_ivp)
+    def d_comov(a: float, r: float, cosmo_model: Self | None = None) -> au.Quantity:
+        """Calculate the comoving distance from scale factor (for solve_ivp).
 
         Args:
             a: scale factor
@@ -156,12 +133,11 @@ class CosmoModel:
 
     @staticmethod
     def d_z(
-        z: Optional[float] = None,
-        cosmo_model: Optional["CosmoModel"] = None,
+        z: float | None = None,
+        cosmo_model: Self | None = None,
         scaled: bool = False,
     ) -> au.Quantity:
-        """
-        Angular distance d_z from a redshift z within given cosmology
+        """Angular distance d_z from a redshift z within given cosmology.
 
         Args:
             z: redshift
@@ -192,10 +168,9 @@ class CosmoModel:
 
     @staticmethod
     def d_z2kpc(
-        distance: float | np.ndarray, cosmo_model: Optional["CosmoModel"] = None
+        distance: float | np.ndarray, cosmo_model: Self | None = None
     ) -> au.Quantity:
-        """
-        Given scale-less distance d, return scaled distance c/H0 * d [kpc]
+        """Given scale-less distance d, return scaled distance c/H0 * d [kpc].
 
         Args:
             distance: scale-less distance
@@ -210,11 +185,10 @@ class CosmoModel:
     @staticmethod
     def arcsec2kpc(
         z: float,
-        dist_z: Optional[float] = None,
-        cosmo_model: Optional["CosmoModel"] = None,
+        dist_z: float | None = None,
+        cosmo_model: Self | None = None,
     ) -> au.Quantity:
-        """
-        Angular distance d_z from a redshift z within given cosmology
+        """Angular distance d_z from a redshift z within given cosmology.
 
         Args:
             z: redshift
