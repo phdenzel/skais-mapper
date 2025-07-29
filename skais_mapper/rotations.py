@@ -5,7 +5,6 @@
 
 from typing import Self
 import numpy as np
-import skais_mapper
 
 
 class R:
