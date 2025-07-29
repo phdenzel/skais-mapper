@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools", "cython", "numpy"]
+requires = ["setuptools>=74.1", "cython", "numpy"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -71,7 +71,7 @@ nn = [
 
 [tool.setuptools]
 ext-modules = [
-    {name = "skais_mapper.raytrace", sources = ["skais_mapper/raytrace.c"]}
+    { name = "skais_mapper.raytrace", sources = ["skais_mapper/raytrace.c"], include-dirs = ["numpy.get_include()"]}
 ]
 
 [tool.setuptools.dynamic]
