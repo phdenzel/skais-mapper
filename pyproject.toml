@@ -48,7 +48,6 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "jupyter>=1.1.1",
     "pytest>=8.3.5",
     "pytest-cov>=5.0.0",
     "ruff>=0.12.5",
@@ -79,10 +78,10 @@ exclude = ["outputs"]
 # Linting, flaking, etc.
 [tool.ruff]
 line-length = 100
-select = ["E", "F", "D"]  # "D" includes pydocstyle rules
-ignore = ["D200", "D212", "D415"]
+lint.select = ["E", "F", "D"]  # "D" includes pydocstyle rules
+lint.ignore = ["D200", "D212", "D415"]
 
-[tool.ruff.pydocstyle]
+[tool.ruff.lint.pydocstyle]
 convention = "google"
 
 [tool.mypy]
