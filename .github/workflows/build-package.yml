@@ -28,7 +28,7 @@ jobs:
 
       - name: Install 🔨
         run: |
-          python -m pip install build --user
+          python -m pip install --upgrade build
 
       - name: Build 🐍📦
         run: |
