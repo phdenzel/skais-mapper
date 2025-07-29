@@ -54,6 +54,7 @@ dev = [
 ]
 
 [project.urls]
+Documentation = "https://github.com/phdenzel/skais-mapper#readme"
 Homepage = "https://github.com/phdenzel/skais-mapper"
 Repository = "https://github.com/phdenzel/skais-mapper.git"
 Issues = "https://github.com/phdenzel/skais-mapper/issues"
