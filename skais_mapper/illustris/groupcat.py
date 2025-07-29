@@ -297,8 +297,8 @@ def load_single(base_path, snapshot, halo_id=-1, subhalo_id=-1) -> dict:
 if __name__ == "__main__":
     # TODO: unittest
     IllustrisH5File.path_func = get_path
-    tng_dir = "/data/procomp/Illustris/tng50-1"
-    snap_id = 50
+    tng_dir = "/scratch/data/illustris/tng50-1"
+    snap_id = 99
 
     # test getting a file path
     filename_0 = get_path(tng_dir, snap_id)
@@ -309,7 +309,17 @@ if __name__ == "__main__":
     # test opening a HDF5 file manually
     print("# Test opening a HDF5 file manually")
     with IllustrisH5File(tng_dir, snap_id) as f:
+        print(f.keys())
         print(f["Header"])
+        print(f["Config"])
+        print(f["IDs"])
+        print(f["Parameters"])
+        print(f["Group"])
+        print(f["Subhalo"])
+
+    print("# Test loading header from HDF5 file")
+    cat_header = load_header(tng_dir, snap_id, True)
+    print(cat_header)
 
     # test loading main group from HDF5 file
     print("# Test loading main group from HDF5 file")

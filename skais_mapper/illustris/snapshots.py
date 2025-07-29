@@ -345,8 +345,8 @@ def find_group_in_partitions(base_path: str, snapshot: int, key: str) -> h5py.Fi
 if __name__ == "__main__":
     # TODO: unittest
     IllustrisH5File.path_func = get_path
-    tng_dir = "/data/procomp/Illustris/tng50-1"
-    snap_id = 50
+    tng_dir = "/scratch/data/illustris/tng50-1"
+    snap_id = 99
 
     # test getting a file path
     print("# Test getting a file path")
