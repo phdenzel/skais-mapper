@@ -69,6 +69,11 @@ nn = [
     "torch>=2.7.1",
 ]
 
+[tool.setuptools]
+ext-modules = [
+    {name = "skais_mapper.raytrace", sources = ["skais_mapper/raytrace.c"]}
+]
+
 [tool.setuptools.dynamic]
 version = {attr = "skais_mapper.__about__.__version__"}
 
