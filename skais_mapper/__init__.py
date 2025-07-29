@@ -9,7 +9,7 @@ from omegaconf import OmegaConf
 import skais_mapper.__about__
 import skais_mapper.rotations
 import skais_mapper.cosmology
-# import skais_mapper.raytrace
+import skais_mapper.raytrace
 import skais_mapper.illustris
 import skais_mapper.simobjects
 import skais_mapper.plotting
