@@ -3,6 +3,21 @@
 #+DATE: 2022-09-06 Tue
 #+OPTIONS: author:nil title:t date:nil timestamp:nil toc:nil num:nil \n:nil
 
+[[https://pypi.org/project/skais-mapper][https://img.shields.io/pypi/v/skais-mapper.svg]]
+[[https://pypi.org/project/skais-mapper][https://img.shields.io/pypi/pyversions/skais-mapper.svg]]
+[[https://www.gnu.org/licenses/gpl-3.0][https://img.shields.io/badge/License-GPL%20v3-blue.svg]]
+
+
+*** Table of Contents
+
+- [[#requirements][Requirements]]
+- [[#install][Install]]
+- [[#usage][Usage]]
+- [[#data][Data]]
+- [[#license][License]]
+
+
+
 ~skais-mapper~ is a tool for generating, plotting, and pre-processing
 hydrodynamics simulation (image) data for state-of-the-art generative
 AI models.
@@ -24,8 +39,8 @@ Also see ~pyproject.toml~ for the relevant python packages.
 
 ** Install
 
-It is recommended to install ~skais-mapper~ in a virtual environment via ~uv~. For
-this, run
+It is recommended to install ~skais-mapper~ in a virtual environment
+via ~uv~. For this, run
 
 #+begin_src shell
   uv sync
@@ -58,23 +73,41 @@ allows to create a development environment compatible with standard
 ~skais-mapper~ implements a few sub-commands for generating and
 manipulating simulation data.  Use the following to see what valid
 sub-commands exist:
-- ~[uv run] skais-mapper -h~
+
+#+begin_src shell
+[uv run] skais-mapper -h
+#+end_src
 
 ~skais-mapper~ sub-commands implement the hydra configuration
 management framework. For more information on sub-command usage,
 inspect the ~skais_mapper/configs/~ directory, or use:
-- ~[uv run] skais-mapper [sub-command] -h~
+
+#+begin_src shell
+[uv run] skais-mapper [sub-command] -h
+#+end_src
 
 For instance, the command to generate 1000 images from snapshot 50 is
 as follows:
-- ~[uv run] skais-mapper generate +experiment=tng50-1-50-2D-0000-1000~
+
+#+begin_src shell
+[uv run] skais-mapper generate +experiment=tng50-1-50-2D-0000-1000
+#+end_src
+
 
 ** Data
 
 Currently, this framework is fully compatible with SPH data from the
-AREPO simulator, in particular the [[https://www.tng-project.org/data/][IllustrisTNG suite]].  It provides
-utility routines to fetch isolated halos from simulations snapshots
-and various raytracing algorithms for 2D column density projections of
-these halos and its galaxies.  The framework generates HDF5 files with
-image datasets of various galactic properties, such as dark matter,
-star, or gas column density distributions.
+AREPO simulator, in particular the
+[[https://www.tng-project.org/data/][IllustrisTNG suite]].  It
+provides utility routines to fetch isolated halos from simulations
+snapshots and various raytracing algorithms for 2D column density
+projections of these halos and its galaxies.  The framework generates
+HDF5 files with image datasets of various galactic properties, such as
+dark matter, star, or gas column density distributions.
+
+
+** License
+
+~skais-mapper~ is distributed under the terms of the
+[[https://spdx.org/licenses/GPL-3.0-or-later.html][GNU General Public
+License v3.0 or later]] license.

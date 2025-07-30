@@ -3,9 +3,11 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Rotation operators for point cloud arrays."""
 
-from typing import Self
+from typing import TypeVar
 import numpy as np
-import skais_mapper
+
+
+TRotation = TypeVar("TRotation", bound="R")
 
 
 class R:
@@ -19,7 +21,7 @@ class R:
         """
         self.omega = omega
 
-    def __call__(self, arr: np.ndarray, **kwargs):
+    def __call__(self, arr: np.ndarray, **kwargs) -> np.ndarray:
         """Rotate the input according to this rotation operator.
 
         Args:
@@ -34,7 +36,7 @@ class R:
         arr = arr @ self.omega.transpose()
         return arr
 
-    def __mul__(self, other: Self):
+    def __mul__(self, other: TRotation) -> TRotation:
         """Combine rotation operators through multiplication.
 
         Args:
@@ -46,7 +48,7 @@ class R:
         return self.__class__(self.omega @ other.omega)
 
     @classmethod
-    def x(cls, theta: float, degrees: bool = True):
+    def x(cls, theta: float, degrees: bool = True) -> TRotation:
         """Rotation operator about the current x-axis by angle theta.
 
         Args:
@@ -57,7 +59,7 @@ class R:
         return cls(omega)
 
     @classmethod
-    def y(cls, theta: float, degrees: bool = True):
+    def y(cls, theta: float, degrees: bool = True) -> TRotation:
         """Rotation operator about the current y-axis by angle theta.
 
         Args:
@@ -68,7 +70,7 @@ class R:
         return cls(omega)
 
     @classmethod
-    def z(cls, theta: float, degrees: bool = True):
+    def z(cls, theta: float, degrees: bool = True) -> TRotation:
         """Rotation operator about the current z-axis by angle theta.
 
         Args:
@@ -79,7 +81,7 @@ class R:
         return cls(omega)
 
     @staticmethod
-    def _x(theta: float, degrees: bool = True):
+    def _x(theta: float, degrees: bool = True) -> np.ndarray:
         """Rotation matrix about the current x-axis by angle theta.
 
         Args:
@@ -97,7 +99,7 @@ class R:
         )
 
     @staticmethod
-    def _y(theta: float, degrees: bool = True):
+    def _y(theta: float, degrees: bool = True) -> np.ndarray:
         """Rotation matrix about the current y-axis by angle theta.
 
         Args:
@@ -115,7 +117,7 @@ class R:
         )
 
     @staticmethod
-    def _z(theta: float, degrees: bool = True):
+    def _z(theta: float, degrees: bool = True) -> np.ndarray:
         """Rotation matrix about the current z-axis by angle theta.
 
         Args:
