@@ -32,7 +32,17 @@ jobs:
 
       - name: Build 🐍📦
         run: |
-          python -m build
+          python -m build --sdist
+
+      - name: Build 🛞
+        uses: pypa/cibuildwheel@v3.1.2
+        with:
+          output-dir: wheelhouse
+          config-file: "pyproject.toml"
+
+      - name: 🛞 to dist
+        run: |
+          mv ./wheelhouse/*.whl dist/
 
       - name: 🗃️ build artifacts
         uses: actions/upload-artifact@v4
