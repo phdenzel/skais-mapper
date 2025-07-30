@@ -48,6 +48,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "cibuildwheel>=2.23.3",
     "pytest>=8.3.5",
     "pytest-cov>=5.0.0",
     "ruff>=0.12.5",
@@ -80,6 +81,8 @@ version = {attr = "skais_mapper.__about__.__version__"}
 [tool.setuptools.packages.find]
 exclude = ["outputs"]
 
+[tool.cibuildwheel]
+build = ["cp312-*", "cp311-*", "cp310-*"]
 
 # Linting, flaking, etc.
 [tool.ruff]
