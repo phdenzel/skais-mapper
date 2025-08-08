@@ -175,6 +175,7 @@ def test_renorm_colormap_adaptor_orig_norm():
     """Test the ReNormColormapAdaptor class."""
     cmap = plt.get_cmap('viridis')
     norm = Normalize(0, 1)
+    adaptor = colors.ReNormColormapAdaptor(cmap, Normalize)
     adaptor = colors.ReNormColormapAdaptor(cmap, norm, orig_norm=Normalize(0, 0.8))
     x = np.linspace(0, 1, 10)
     result = adaptor(x)
