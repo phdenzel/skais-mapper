@@ -44,8 +44,7 @@ def test_get_set_run_id(monkeypatch):
     assert len(rid) == 12
     assert re.fullmatch(r"[0-9a-fA-F]+", rid)
     # Restore
-    if orig_uid is not None:
-        skais_mapper.RUN_UID = orig_uid
+    skais_mapper.RUN_UID = orig_uid
 
 
 def test_current_time_variants():
