@@ -3,7 +3,19 @@
   src ? ./.,
   # subdir ? "",
 }:
-let 
+let
+  remote-chuchichaestli = builtins.fetchurl {
+    url = "https://raw.githubusercontent.com/CAIIVS/chuchichaestli/refs/heads/main/default.nix";
+    sha256 = "sha256:0a838l8h2qv4c95zi68r1nr8ndmn8929f53js04g3h15ii3zbskb";
+  };
+  chuchichaestli = pkgs.callPackage remote-chuchichaestli {
+    src = pkgs.fetchFromGitHub {
+      owner = "CAIIVS";
+      repo = "chuchichaestli";
+      rev = "main";
+      sha256 = "sha256:0l5q6j7kav2lsy1pl1izqa8f31q32r7fz47qhim45gjawp838vrw";
+    };
+  };
   pythonPackage = pkgs.python312Packages.buildPythonApplication {
     pname = "skais-mapper";
     version = "0.1.1";
@@ -24,29 +36,7 @@ let
     # doCheck = false;
     meta = {
       description = "A framework for generating deep-learning SKA radio telescope & cosmological hydrodynamical simulation data.";
-      meta.description.license = pkgs.lib.licenses.gpl3Plus;
-    };
-  };
-  chuchichaestli = pkgs.python312Packages.buildPythonPackage {
-    pname = "chuchichaestli";
-    version = "0.2.9";
-    format = "pyproject";
-    build-system = with pkgs.python312Packages; [ hatchling ];
-    propagatedBuildInputs = with pkgs.python312Packages; [
-      numpy
-      h5py
-      torch
-      torchmetrics
-      timm
-      open-clip-torch
-      psutil
-    ];
-    doCheck = false;
-    src = pkgs.fetchPypi {
-      pname = "chuchichaestli";
-      version = "0.2.9";
-      sha256 = "sha256-mreda+JzvhHQ8RZSBgieZ301WTDQEXpyWJEDw4FQ3Dc=";
-      format = "setuptools";
+      license = pkgs.lib.licenses.gpl3Plus;
     };
   };
 in
