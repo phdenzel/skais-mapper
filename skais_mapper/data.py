@@ -45,7 +45,6 @@ class ImgRead:
                     data = self._stack_max_expand(data, pad_val=0)
             return data
         filepath = Path(paths) if paths is not None else Path("")
-        # print("Filepath", filepath)
         match filepath.suffix:
             case ".npy":
                 return self._read_npy(filepath, **kwargs)
@@ -289,6 +288,10 @@ class Img2H5Buffer:
             ")"
         )
 
+    def __repr__(self):
+        """String representation of the instance."""
+        return self.__str__()
+
     def configure_rdcc(
         self,
         cache_size: int | float | str | None = None,
@@ -387,7 +390,7 @@ class Img2H5Buffer:
             "dtype",
             "chunks",
             "maxshape",
-            "compressioncompression_opts",
+            "compression_opts",
             "scaleoffset",
             "shuffle",
             "fletcher32",
@@ -440,7 +443,7 @@ class Img2H5Buffer:
         elif isinstance(data, str | Path) or (
             isinstance(data, list) and isinstance(data[0], str | Path)
         ):
-            return self.store(ImgRead()(data))
+            return self.store(ImgRead()(data), squash=squash)
         return self
 
     def send(self, clear: bool = True) -> np.ndarray | dict | None:
@@ -454,7 +457,7 @@ class Img2H5Buffer:
                 self.store(self.files.pop(0))
             else:
                 self.store(self.files[0])
-            return self.send(clear=clear)
+            return self.send(clear=True)
         return None
 
     def flush(self) -> np.ndarray | dict | list[np.ndarray | dict] | None:
@@ -507,11 +510,9 @@ class Img2H5Buffer:
             path = Path(str(path).split(":")[0])
         if group.startswith("/"):
             group = group[1:]
-        if group is None:
-            raise ValueError("inc_write: no data target, add valid `group`...")
         if data is None:
             data = self.flush()
-        elif isinstance(data, np.ndarray) and expand_dim:
+        if isinstance(data, np.ndarray) and expand_dim:
             data = data[np.newaxis, ...]
         if isinstance(overwrite, bool):
             overwrite = 0 if overwrite else None
