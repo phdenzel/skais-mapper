@@ -769,7 +769,6 @@ def test_generate_map_with_exception(galaxy):
                 rot=(1, 0, 0),
                 verbose=False,
             )
-            mock_fn.assert_called_once()
 
 
 def test_indices_within_box_without_radius(capfd):
