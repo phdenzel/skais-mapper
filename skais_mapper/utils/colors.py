@@ -6,6 +6,7 @@
 import random
 import numpy as np
 from matplotlib.colors import Colormap, LinearSegmentedColormap, Normalize, to_hex
+import matplotlib as mpl
 from matplotlib.cm import ScalarMappable
 from matplotlib import pyplot as plt
 
@@ -30,13 +31,13 @@ def color_variant(hex_color: str, shift: int = 10) -> str:
     # limit to interval 0 and 255
     new_rgb_int = [min([255, max([0, i])]) for i in new_rgb_int]
     # hex() produces "0x88", we want the last two digits
-    return "#" + "".join([hex(i)[2:] for i in new_rgb_int])
+    return "#" + "".join([hex(i)[2:] if i else "00" for i in new_rgb_int])
 
 
 class ReNormColormapAdaptor(Colormap):
     """Adaptor for re-normalizing color mappable."""
 
-    def __init__(self, base, cmap_norm, orig_norm=None):
+    def __init__(self, base, cmap_norm: Normalize, orig_norm: Normalize | None = None):
         if orig_norm is None:
             if isinstance(base, ScalarMappable):
                 orig_norm = base.norm
@@ -233,12 +234,14 @@ class SkaisColors:
         Returns:
             (mpl.colors.LinearSegmentedColormap object): reversed colormap
         """
-        if secondary_color is None:
-            secondary_color = color_variant(color_str, shift=125)
         if color_str in cls.__dict__:
             color = cls.__dict__[color_str]
         else:
             color = color_str
+        if secondary_color in cls.__dict__:
+            secondary_color = cls.__dict__[secondary_color]
+        elif secondary_color is None:
+            secondary_color = color_variant(color, shift=125)
         cmap = LinearSegmentedColormap.from_list("Skais" + color_str, [secondary_color, color])
         return cmap
 
@@ -357,7 +360,12 @@ class SkaisColorMaps:
         for g in SkaisColorMaps.aslist:
             if verbose:
                 print(g.name)
-            plt.register_cmap(name=g.name, cmap=g)
+            if g.name not in mpl.colormaps:
+                mpl.colormaps.register(name=g.name, cmap=g)
+            if f"skais_{g.name}" not in mpl.colormaps:
+                mpl.colormaps.register(name=f"skais_{g.name}", cmap=g)
+            
+            
 
 
 if __name__ == "__main__":
