@@ -14,7 +14,7 @@ from collections.abc import Callable
 import h5py
 from skais_mapper.utils import nbytes
 
-__all__ = ["IllustrisH5File", "pidx_from_ptype", "ptype_from_pidx", "parse_name"]
+__all__ = ["IllustrisH5File", "pidx_from_ptype", "ptype_from_pidx"]
 
 
 class IllustrisH5File(h5py.File):
