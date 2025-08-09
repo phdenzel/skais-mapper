@@ -104,7 +104,7 @@ def _get_cmap(
     if under is not None:
         cmap.set_under(under)
     if over is not None:
-        cmap.set_under(over)
+        cmap.set_over(over)
     if bad is not None:
         cmap.set_bad(bad)
     return cmap

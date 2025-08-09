@@ -20,7 +20,7 @@ from astropy import units as au
 # from astropy.visualization import AsinhStretch
 # from astropy.visualization import LogStretch
 from typing import Any
-from collections.abc import Iterable
+from collections.abc import Iterable, Callable
 import skais_mapper
 from skais_mapper.utils import get_run_id, compress_encode
 from skais_mapper.data import Img2H5Buffer
@@ -49,6 +49,7 @@ def map_TNG_sample(
     rng_seed: int = 42,
     flag_lim: float = 0,
     flag_N: int = 64,
+    post_hook: Callable | None = None,
     dry_run: bool = False,
     verbose: bool = True,
 ):
@@ -74,6 +75,7 @@ def map_TNG_sample(
         rng_seed: Seed for the random number generation.
         flag_lim: Flag the map in the metadata if N pixel values fall below the limit.
         flag_N: The number of pixels before an image is flagged.
+        post_hook: Post projection callback function to, e.g., rescale the map.
         dry_run: If True, nothing is saved and expensive computation is skipped.
         verbose: If True, print status updates to command line.
     """
@@ -88,7 +90,6 @@ def map_TNG_sample(
         "rot": rot,
         "verbose": verbose,
     }
-    post_hook = None
     # set up configs for group
     if group == "gas":
         kwargs["keys"] = ["particle_positions", "masses", "radii", "center"]
@@ -112,7 +113,7 @@ def map_TNG_sample(
         )
         sigma_crit = obj.cosmology.rho_crit
 
-        def post_hook(x, y):
+        def post_hook_21cm(x, y):
             return (
                 189
                 * au.mK
@@ -123,6 +124,8 @@ def map_TNG_sample(
                 / ((y[1] - y[0]) * pixel_size * sigma_crit)
             )
 
+        if post_hook is None:
+            post_hook = post_hook_21cm
         if projected_unit is None:
             projected_unit = au.mK
         flag_lim, flag_N = 0, int(grid_size**2 / 10)
@@ -152,6 +155,8 @@ def map_TNG_sample(
         kwargs["keys"] = ["particle_positions", "masses", "radii", "center"]
         if projected_unit is None:
             projected_unit = au.Msun / au.kpc**2
+    else:
+        raise ValueError(f"Map group type {group} is not known.")
     if isinstance(kwargs["keys"][1], tuple | list):
         keys = kwargs.pop("keys")
         quantity, extent, N = obj.generate_map(keys=keys, **kwargs)
@@ -248,6 +253,7 @@ def map_TNG_galaxies(
     output: str | None = None,
     src_dir: str | None = None,
     sim_type: str = "illustris/tng50-1",
+    csv_file: str | Path | None = None,
     part_max: int | None = None,
     part_min: int | None = 20_000,
     retries: int | None = None,
@@ -268,6 +274,7 @@ def map_TNG_galaxies(
         output: Output filename. Can have format fields '{}' for group and snapshot.
         src_dir: Path to the root of the simulation snapshots.
         sim_type: Simulation type (should correspond to the subpath in `src_dir`).
+        csv_file: Path the the CSV file used for logging supplemental information.
         part_max: Maximum number of particles to use for map generation.
         part_min: Minimum number of particles to use for map generation.
         retries: If not None, sets the maximum number of replacement candidates for skipped groups.
@@ -298,7 +305,8 @@ def map_TNG_galaxies(
         )
     else:
         hdf5_file = Path(output)
-    csv_file = hdf5_file.parent / f"{get_run_id()}.group_particles.csv"
+    if csv_file is None:
+        csv_file = hdf5_file.parent / f"{get_run_id()}.group_particles.csv"
     if not csv_file.exists() and not dry_run:
         csv_file.parent.mkdir(parents=True, exist_ok=True)
         with csv_file.open(mode="w", newline="") as fcsv:

@@ -64,8 +64,6 @@ class CosmoModel:
         """The radiation density parameter setter."""
         if r is None:
             r = (1 + self.omega_k) - self.omega_m - self.omega_l
-        if isinstance(r, property):
-            r = CosmoModel._omega_r
         self._omega_r = r
 
     @property
@@ -109,8 +107,6 @@ class CosmoModel:
             a = self.a
         elif a is None:
             a = 1.0
-        if self.omega_r is None:
-            self.omega_r
         return (
             self.H0
             * (self.omega_m / a**3 + self.omega_r / a**4 + self.omega_k / a**2 + self.omega_l)
@@ -154,8 +150,6 @@ class CosmoModel:
         comov = partial(CosmoModel.d_comov, cosmo_model=cosmo_model)
         if z is None and cosmo_model.a:
             a = cosmo_model.a
-        elif z is None:
-            a = 0
         else:
             a = 1.0 / (1.0 + z)
         a_lim = [a, 1]

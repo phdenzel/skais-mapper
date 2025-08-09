@@ -557,7 +557,7 @@ class TNGGalaxy(SPHGalaxy):
         cosmo_pars.setdefault("omega_m", self.header["snapshot"].get("Omega0", 0.3089))
         cosmo_pars.setdefault("omega_k", self.header["snapshot"].get("OmegaK", 0))
         cosmo_pars.setdefault("z", self.header["snapshot"].get("Redshift", None))
-        cosmo_pars.setdefault("z", 1. / self.header["snapshot"].get("Time", 1) - 1)
+        cosmo_pars.setdefault("z", 1.0 / self.header["snapshot"].get("Time", 1) - 1)
         cosmo_pars.setdefault("h", self.header["snapshot"].get("HubbleParam", 0.6774))
         if in_place:
             self.cosmology = CosmoModel(**cosmo_pars)
@@ -892,31 +892,6 @@ class ArepoGalaxy(TNGGalaxy):
 
 class GasolineGalaxy(SPHGalaxy):
     """A Gasoline Galaxy parser."""
-
-
-#     @staticmethod
-#     def read(filename, properties: dict = None, **kwargs):
-#         """
-#         Read and configure a gasoline simulation using pynbody
-#
-#         Args:
-#           filename (str): Relative path to the data of the simulation
-#           properties (dict): Extra data properties to be added
-#         """
-#         if properties is None:
-#             properties = {}
-#         if os.path.exists(filename):
-#             s = filename  # s = pb.load(filename, **kwargs)
-#             # for k in properties:
-#             #    s.properties[k] = properties[k]
-#             # s.physical_units()
-#             return s
-#         raise FileNotFoundError(
-#             f"Problem loading the given file: {filename}\n"
-#             f"Current working directory: {os.getcwd()}"
-#         )
-#
-#
 
 
 def indices_within_box(

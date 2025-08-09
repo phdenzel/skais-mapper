@@ -288,7 +288,7 @@ def next_prime(n: int) -> int:
         while True:
             if n in SMALL_PRIMES:
                 return n
-        n += 2
+            n += 2
 
     # find our position in the sieve rotation via binary search
     x = int(n % 210)
