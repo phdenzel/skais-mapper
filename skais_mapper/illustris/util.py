@@ -190,124 +190,95 @@ def ptype_from_pidx(pidx: int | str) -> str:
     raise ValueError(f"Unknown particle type name {pidx}.")
 
 
-def parse_name(
-    filename: str | Path,
-    root: str | None = None,
-    groups: str | list[str] | None = None,
-    mask: str | None = None,
-    formatters: dict | None = None,
-    **kwargs,
-) -> dict | None:
-    r"""Parse a filename of Illustris preprocessed image files (see scripts).
+# def parse_name(
+#     filename: str | Path,
+#     root: str | None = None,
+#     groups: str | list[str] | None = None,
+#     mask: str | None = None,
+#     formatters: dict | None = None,
+#     **kwargs,
+# ) -> dict | None:
+#     r"""Parse a filename of Illustris preprocessed image files (see scripts).
 
-    Args:
-        filename:
-            Path (string) of the file
-        root:
-            Root directory where the file should be stored.
-        groups:
-            Selection of subdirectories indicating the image class.
-            Optional, but should be specified to speed up file search.
-        mask:
-            Format string mask for matching regular expressions.
-            Fields are split between ':' as field_name:regex_pattern:type, i.e.
-            '{test:(?P=<test>.*?):s}_{flight::s}_no.{number::d}.{extension::s}'
-        formatters:
-            Format map from strings to types, i.e. 'f' -> float
-            Default: {'s': str, 'd': int, 'f': float, '': str}
-            Note: add an empty key string for defaulting unknown cases
-        **kwargs: Additional keyword arguments.
+#     Args:
+#         filename:
+#             Path (string) of the file
+#         root:
+#             Root directory where the file should be stored.
+#         groups:
+#             Selection of subdirectories indicating the image class.
+#             Optional, but should be specified to speed up file search.
+#         mask:
+#             Format string mask for matching regular expressions.
+#             Fields are split between ':' as field_name:regex_pattern:type, i.e.
+#             '{test:(?P=<test>.*?):s}_{flight::s}_no.{number::d}.{extension::s}'
+#         formatters:
+#             Format map from strings to types, i.e. 'f' -> float
+#             Default: {'s': str, 'd': int, 'f': float, '': str}
+#             Note: add an empty key string for defaulting unknown cases
+#         **kwargs: Additional keyword arguments.
 
-    Returns:
-        (dict): Keyword map with matches
+#     Returns:
+#         (dict): Keyword map with matches
 
-    Warns:
-        (Warning): if no matches can be found.
-    """
-    filename = Path(filename)
-    # set defaults
-    if root is None:
-        root = "."
-    if groups is None:
-        groups = "*"
-    if mask is None:
-        mask = (
-            "{base_name:(?P<base_name>.*):s}."
-            "{snapshot::d}.groupID{gid::d}_units_{unit::s}@{scale::f}_"
-            r"{scale_unit:(?P<scale_unit>\S+?):s}[[@\.](.\D+)?]"
-            r"{res:(?P<res>.*\d+)?:f}[(\w)?]"
-            r"{res_unit:(?P<res_unit>.\w+)?:s}"
-            r"[(\.)?]{extension:(?P<extension>.*):s}"
-        )
-    if formatters is None:
-        formatters = {"s": str, "d": int, "f": float, "": str}
-    # find file
-    if filename.exists():
-        filepath = filename
-    else:
-        rootpath = Path(root)
-        filepath = None
-        for group in groups:
-            files = list(rootpath.rglob(f"**/{group}/**/{filename}"))
-            if files:
-                filepath = files[0]
-                break
-    if filepath is None:
-        return None
-    # parse mask
-    tokens = re.split(r"\{(.*?)\}", mask)
-    keywords = [s.split(":")[0] for s in tokens[1::2]]
-    formats = []
-    for s in tokens[1::2]:
-        k_and_f = s.split(":")
-        fkey = k_and_f[-1][-1] if len(k_and_f) > 1 else ""
-        formats.append(formatters[fkey])
-    # match keywords in filename
-    tokens[1::2] = [
-        f"(?P<{k.split(':')[0]}>.*?)" if not k.split(":")[1] else f"{k.split(':')[1]}"
-        for k in tokens[1::2]
-    ]
-    tokens[0::2] = [
-        re.escape(t) if "[" not in t and "]" not in t else t[1:-1] for t in tokens[0::2]
-    ]
-    pattern = "".join(tokens)
-    matches = re.match(pattern, str(filepath))
-    match_dict = {}
-    if not matches:
-        warnings.warn(f"No matches found with format string [mask]: {mask}", Warning)
-    else:
-        match_dict = {
-            x: (f(matches.group(x)) if matches.group(x) else matches.group(x))
-            for x, f in zip(keywords, formats)
-        }
-    match_dict |= kwargs
-    return match_dict
-
-
-if __name__ == "__main__":
-    tng_dir = "/data/illustris/tng50-1"
-    snap_id = 50
-    # test IllustrisH5File class usage on existing/non-existing files
-    print("# Test IllustrisH5File class usage on existing file")
-    with IllustrisH5File(tng_dir, snap_id, 679) as f:
-        print(f)
-    print("# Test IllustrisH5File class usage on non-existing file")
-    with IllustrisH5File(tng_dir, snap_id, 680) as f:
-        print(f)
-
-    print("# Test parse_name")
-    preprocessed_dir = "/data/illustris/tng50-1.preprocessed/"
-    mdict = parse_name(
-        filename="sigma_tng50-1.99.groupID0022_units_Msol_kpc-2@411.8602_kpc.npy",
-        root=preprocessed_dir,
-    )
-    print(mdict)
-    print()
-    mdict2 = parse_name(
-        filename=(
-            "21cm_tng50-1.99.groupID0010_units_mK@72.14207819_deg"
-            "@mockres_0.006666666666666666_deg.npy"
-        ),
-        root=preprocessed_dir,
-    )
-    print(mdict2)
+#     Warns:
+#         (Warning): if no matches can be found.
+#     """
+#     filename = Path(filename)
+#     # set defaults
+#     if root is None:
+#         root = "."
+#     if groups is None:
+#         groups = "*"
+#     if mask is None:
+#         mask = (
+#             "{base_name:(?P<base_name>.*):s}."
+#             "{snapshot::d}.groupID{gid::d}_units_{unit::s}@{scale::f}_"
+#             r"{scale_unit:(?P<scale_unit>\S+?):s}[[@\.](.\D+)?]"
+#             r"{res:(?P<res>.*\d+)?:f}[(\w)?]"
+#             r"{res_unit:(?P<res_unit>.\w+)?:s}"
+#             r"[(\.)?]{extension:(?P<extension>.*):s}"
+#         )
+#     if formatters is None:
+#         formatters = {"s": str, "d": int, "f": float, "": str}
+#     # find file
+#     if filename.exists():
+#         filepath = filename
+#     else:
+#         rootpath = Path(root)
+#         filepath = None
+#         for group in groups:
+#             files = list(rootpath.rglob(f"**/{group}/**/{filename}"))
+#             if files:
+#                 filepath = files[0]
+#                 break
+#     if filepath is None:
+#         return None
+#     # parse mask
+#     tokens = re.split(r"\{(.*?)\}", mask)
+#     keywords = [s.split(":")[0] for s in tokens[1::2]]
+#     formats = []
+#     for s in tokens[1::2]:
+#         k_and_f = s.split(":")
+#         fkey = k_and_f[-1][-1] if len(k_and_f) > 1 else ""
+#         formats.append(formatters[fkey])
+#     # match keywords in filename
+#     tokens[1::2] = [
+#         f"(?P<{k.split(':')[0]}>.*?)" if not k.split(":")[1] else f"{k.split(':')[1]}"
+#         for k in tokens[1::2]
+#     ]
+#     tokens[0::2] = [
+#         re.escape(t) if "[" not in t and "]" not in t else t[1:-1] for t in tokens[0::2]
+#     ]
+#     pattern = "".join(tokens)
+#     matches = re.match(pattern, str(filepath))
+#     match_dict = {}
+#     if not matches:
+#         warnings.warn(f"No matches found with format string [mask]: {mask}", Warning)
+#     else:
+#         match_dict = {
+#             x: (f(matches.group(x)) if matches.group(x) else matches.group(x))
+#             for x, f in zip(keywords, formats)
+#         }
+#     match_dict |= kwargs
+#     return match_dict
