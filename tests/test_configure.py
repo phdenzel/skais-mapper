@@ -5,7 +5,7 @@
 
 import pytest
 import logging
-from unittest.mock import patch, MagicMock, call
+from unittest.mock import MagicMock
 import skais_mapper.configure as configure
 
 
