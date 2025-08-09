@@ -6,13 +6,7 @@
 import pytest
 import numpy as np
 from unittest.mock import patch
-
-try:
-    from PIL import Image
-
-    PIL_AVAILABLE = True
-except ImportError:
-    PIL_AVAILABLE = False
+from PIL import Image
 from skais_mapper.data import ImgRead, Img2H5Buffer
 
 
@@ -33,7 +27,6 @@ def _buffer(tmp_path):
     return Img2H5Buffer(data=arr, target=tmp_path / "test.hdf5")
 
 
-@pytest.mark.skipif(not PIL_AVAILABLE, reason="PIL (Pillow) not available")
 def test_read_png_and_jpg(tmp_path):
     """Test reading PNG and JPG images using ImgRead."""
     # Create a simple grayscale PNG image using Pillow
@@ -59,7 +52,6 @@ def test_read_png_and_jpg(tmp_path):
     assert out_jpg.shape == (1, 10, 10)
 
 
-@pytest.mark.skipif(not PIL_AVAILABLE, reason="PIL (Pillow) not available")
 def test_read_png_file_not_found(tmp_path):
     """Test reading PNG and JPG images with a missing file."""
     missing_file = tmp_path / "doesnotexist.png"
@@ -69,7 +61,6 @@ def test_read_png_file_not_found(tmp_path):
         ImgRead._read_jpg(str(missing_file))
 
 
-@pytest.mark.skipif(not PIL_AVAILABLE, reason="PIL (Pillow) not available")
 def test_read_png_multichannel(tmp_path):
     """Test reading multi-channel PNG images."""
     # RGB image
@@ -80,7 +71,6 @@ def test_read_png_multichannel(tmp_path):
     assert out.shape == (1, 5, 5, 3)
 
 
-@pytest.mark.skipif(not PIL_AVAILABLE, reason="PIL (Pillow) not available")
 def test_read_png_multiple_paths(tmp_path):
     """Test reading multi-channel PNG images."""
     # RGB image
@@ -94,7 +84,6 @@ def test_read_png_multiple_paths(tmp_path):
     assert out.shape == (2, 5, 5, 3)
 
 
-@pytest.mark.skipif(not PIL_AVAILABLE, reason="PIL (Pillow) not available")
 def test_read_jpg_multiple_paths_no_squash(tmp_path):
     """Test reading multi-channel jpg images."""
     # RGB image
@@ -108,7 +97,6 @@ def test_read_jpg_multiple_paths_no_squash(tmp_path):
     assert len(out) == 2
 
 
-@pytest.mark.skipif(not PIL_AVAILABLE, reason="PIL (Pillow) not available")
 def test_read_png_multiple_paths_invalid_squash(tmp_path):
     """Test reading multi-channel PNG images."""
     # RGB image
