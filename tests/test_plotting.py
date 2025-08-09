@@ -24,14 +24,7 @@ def fake_cmap(monkeypatch):
     """Fixture to mock the colormap retrieval."""
 
     class FakeCmap:
-        def set_under(self, val):
-            pass
-
-        def set_over(self, val):
-            pass
-
-        def set_bad(self, val):
-            pass
+        pass
 
     monkeypatch.setattr(plotting, "_get_cmap", lambda *a, **k: FakeCmap())
     return FakeCmap

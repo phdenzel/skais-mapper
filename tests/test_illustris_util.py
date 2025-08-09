@@ -8,40 +8,40 @@ import types
 import skais_mapper.illustris.util as util
 
 
-@pytest.fixture
-def dummy_path_func():
-    """A dummy path function that returns a fixed path for testing."""
-    return lambda base, snap, part: f"/fake/path/snap_{snap}_part_{part}.hdf5"
+# @pytest.fixture
+# def dummy_path_func():
+#     """A dummy path function that returns a fixed path for testing."""
+#     return lambda base, snap, part: f"/fake/path/snap_{snap}_part_{part}.hdf5"
 
 
-@pytest.fixture
-def mock_nbytes(monkeypatch):
-    """Mock the nbytes function to return a fixed size for testing."""
-    monkeypatch.setattr(
-        util, "nbytes", lambda x: 16 if x == "16" else int(str(x).replace("G", "1000000000"))
-    )
+# @pytest.fixture
+# def mock_nbytes(monkeypatch):
+#     """Mock the nbytes function to return a fixed size for testing."""
+#     monkeypatch.setattr(
+#         util, "nbytes", lambda x: 16 if x == "16" else int(str(x).replace("G", "1000000000"))
+#     )
 
 
-@pytest.fixture
-def fake_file(monkeypatch):
-    """A fake h5py File class to simulate the h5py.File context manager."""
+# @pytest.fixture
+# def fake_file(monkeypatch):
+#     """A fake h5py File class to simulate the h5py.File context manager."""
 
-    class DummyH5File:
-        def __init__(self, *args, **kwargs):
-            self.args = args
-            self.kwargs = kwargs
+#     class DummyH5File:
+#         def __init__(self, *args, **kwargs):
+#             self.args = args
+#             self.kwargs = kwargs
 
-        def __enter__(self):
-            return self
+#         def __enter__(self):
+#             return self
 
-        def __exit__(self, *a, **k):
-            return None
+#         def __exit__(self, *a, **k):
+#             return None
 
-        def __str__(self):
-            return "<FakeH5File>"
+#         def __str__(self):
+#             return "<FakeH5File>"
 
-    monkeypatch.setattr(util, "h5py", types.SimpleNamespace(File=DummyH5File))
-    return DummyH5File
+#     monkeypatch.setattr(util, "h5py", types.SimpleNamespace(File=DummyH5File))
+#     return DummyH5File
 
 
 @pytest.mark.parametrize(
