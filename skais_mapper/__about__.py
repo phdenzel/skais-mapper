@@ -3,4 +3,4 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Package metadata."""
 
-__version__ = "0.1.2.dev3"
+__version__ = "0.1.2.dev4"
