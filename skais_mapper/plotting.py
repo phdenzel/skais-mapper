@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Plotting routines for maps and images."""
 
+from __future__ import annotations
 from pathlib import Path
 import numpy as np
 import astropy.units as au
@@ -12,21 +13,13 @@ from matplotlib import pyplot as plt
 from matplotlib.image import AxesImage
 from matplotlib.colors import Colormap
 from functools import singledispatch
-from typing import Any
+from typing import Any, TYPE_CHECKING
 from collections.abc import Sequence
+from skais_mapper._compat import TORCH_AVAILABLE
 
-try:
+if TORCH_AVAILABLE or TYPE_CHECKING:
     import torch
     from torch import Tensor
-
-    TORCH_INSTALLED = True
-except ImportError:
-    TORCH_INSTALLED = False
-
-    class Tensor:
-        """Dummy Tensor class for typing."""
-
-        ...
 
 
 def _from_batch(
@@ -50,7 +43,7 @@ def _from_batch(
                 metadata = metadata[idx]
         if isinstance(metadata, dict):
             for key in metadata:
-                if isinstance(metadata[key], Tensor):
+                if isinstance(metadata[key], torch.Tensor):
                     metadata[key] = metadata[key].detach().clone()[batch_idx[-1]]
                 if isinstance(metadata[key], np.ndarray | list | tuple):
                     metadata[key] = metadata[key][batch_idx[-1]]
@@ -263,12 +256,12 @@ def plot_image(
     raise NotImplementedError(f"Invalid data type {type(data)}.")
 
 
-@plot_image.register(Tensor)
+@plot_image.register(torch.Tensor)
 @alias_kw("colormap", "cmap")
 @alias_kw("colorbar", "cbar")
 @alias_kw("colorbar_label", "cbar_label")
 def plot_image_tensor(
-    data: Tensor,
+    data: torch.Tensor,
     batch_idx: int | Sequence[int] | None = None,
     extent: Sequence[float] | None = None,
     colormap: Colormap | None = None,
@@ -448,7 +441,7 @@ def plot_image_quantity(
 @alias_kw("colorbar", "cbar")
 @alias_kw("cbar_label", "colorbar_label")
 def plot_image_from_batch(
-    data: Sequence[Tensor | np.ndarray | dict],
+    data: Sequence[torch.Tensor | np.ndarray | dict],
     batch_idx: int | Sequence[int] | None = None,
     extent: Sequence[float] | None = None,
     colormap: None = None,
@@ -482,7 +475,7 @@ def plot_image_from_batch(
         verbose: Print results to stdout.
         kwargs: Additional keyword arguments for `matplotlib.pyplot.imshow`.
     """
-    if all([isinstance(d, Tensor) or isinstance(d, np.ndarray) for d in data]):
+    if all([isinstance(d, torch.Tensor) or isinstance(d, np.ndarray) for d in data]):
         data = data
         metadata = {}
     else:

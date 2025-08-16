@@ -55,7 +55,7 @@ def test_from_batch_numpy(batch, batch_idx, expected_data_idx, expected_meta_idx
     assert isinstance(meta_out, dict)
 
 
-@pytest.mark.skipif(not plotting.TORCH_INSTALLED, reason="torch not installed")
+@pytest.mark.skipif(not plotting.TORCH_AVAILABLE, reason="torch not installed")
 def test_from_batch_torch_tensor():
     """Test the _from_batch function with torch tensors."""
     import torch
@@ -317,7 +317,7 @@ def test_plot_image_array_dispatch(monkeypatch, fake_cmap, fake_plt):
     plotting._plot_data.assert_called()
 
 
-@pytest.mark.skipif(not plotting.TORCH_INSTALLED, reason="torch not installed")
+@pytest.mark.skipif(not plotting.TORCH_AVAILABLE, reason="torch not installed")
 def test_plot_image_tensor_dispatch(monkeypatch, fake_cmap, fake_plt):
     """Test that plot_image dispatches to _plot_data for torch tensors."""
     import torch
