@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 from skais_mapper._compat import TORCH_AVAILABLE
-from typing import Literal, TYPE_CHECKING
+from typing import Literal, Callable, TYPE_CHECKING
 
 if TORCH_AVAILABLE or TYPE_CHECKING:
     import torch
@@ -227,6 +227,7 @@ def radial_pdf(
     pdf = pmf / dr
     return pdf, edges
 
+
 def radial_cdf(
     maps: torch.Tensor,
     r: torch.Tensor | None = None,
@@ -260,3 +261,92 @@ def radial_cdf(
     dr = edges[:, 1:] - edges[:, :-1]
     cdf = (pdf * dr).cumsum(dim=1)
     return cdf, edges
+
+
+class RadialProfile:
+    """Radial profile metric for recording and aggregating map profiles."""
+
+    def __init__(
+        self,
+        nbins: int = 100,
+        center_mode: Literal["centroid", "image_center", "fixed"] = "image_center",
+        cumulative: bool = False,
+        eps: float = 1e-12,
+        device: torch.device | None = None,
+        reduction: Callable | None = torch.mean,
+    ) -> None:
+        """Constructor:
+
+        Args:
+            nbins: Number of radial bins.
+            center_mode: Centering mode for radial profiles; one of
+              `["centroid", "image_center", "fixed"]`.
+            cumulative: Whether to compare cumulative radial profiles.
+            eps: Numerical stability for divisions.
+            device: Tensor allocation/computation device.
+            reduction: Reduction function to be used when computing profile summary.
+        """
+        self.device = torch.get_default_device() if device is None else device
+        self.nbins = int(max(1, nbins))
+        self.center_mode = center_mode
+        self.cumulative = bool(cumulative)
+        self.eps = float(eps)
+        self.target_aggregate = None
+        self.aggregate = None
+        self.edges = None
+        self.reduction = reduction
+
+    def to(self, device: torch.device):
+        """Perform tensor device conversion for all internal tensors.
+
+        Args:
+            device: Tensor allocation/computation device.
+        """
+        self.device = device
+        self.aggregate = (
+            self.aggregate.to(device=self.device) if self.aggregate is not None else None
+        )
+
+    def reset(self, n_observations: int = 0, device: torch.device | None = None) -> None:
+        """Reset internal metrics state."""
+        self.device = device if device is not None else self.device
+        self.target_aggregate = None
+        self.aggregate = None
+
+    @torch.no_grad()
+    def update(self, data: torch.Tensor, prediction: torch.Tensor) -> None:
+        """Accumulate profile batches.
+
+        Args:
+            data: Target maps of shape (B, H, W), (B, C, H, W) or (H, W).
+            prediction: Predicted maps of matching shape.
+        """
+        targ_ = _sanitize_ndim(data)
+        pred_ = _sanitize_ndim(prediction)
+        if targ_.shape != pred_.shape:
+            raise ValueError(f"Input shapes must match, got {targ_.shape} vs {pred_.shape}")
+        B, H, W = pred_.shape
+        # Compute radial PDFs for both maps using identical binning.
+        if self.cumulative:
+            prf_p, edges = radial_cdf(pred_, nbins=self.nbins, center_mode=self.center_mode)
+            prf_t, _ = radial_cdf(targ_, bin_edges=edges[0], center_mode=self.center_mode)
+        else:
+            prf_p, edges = radial_pdf(pred_, nbins=self.nbins, center_mode=self.center_mode)
+            prf_t, _ = radial_pdf(targ_, bin_edges=edges[0], center_mode=self.center_mode)
+        if self.edges is None:
+            self.edges = edges[0]
+        if self.target_aggregate is None:
+            self.target_aggregate = prf_t
+        else:
+            self.target_aggregrate = torch.cat((self.target_aggregate, prf_t), dim=0)
+        if self.aggregate is None:
+            self.aggregate = prf_p
+        else:
+            self.aggregate = torch.cat((self.aggregate, prf_p), dim=0)
+
+    @torch.no_grad()
+    def compute(self, reduction: Callable | None = None) -> tuple[torch.Tensor, torch.Tensor]:
+        """Return a radial profile summary (reduction across batches)."""
+        if reduction is None:
+            reduction = self.reduction
+        return reduction(self.aggregate, dim=0), reduction(self.target_aggregate, dim=0)
