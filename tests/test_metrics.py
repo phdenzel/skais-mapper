@@ -405,3 +405,31 @@ def test_ClumpinessError_compute(show_plots):
     ce.update(maps_noise, maps)
     val = ce.compute()
     assert val > 0
+
+
+@pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch not installed")
+def test_PowerSpectrumError_update(gaussians, show_plots):
+    """Test `PowerSpectrumError.update`."""
+    gaussians = gaussians * 1e12
+    rel_noise = torch.rand(*gaussians.shape)
+    gaussians_noise = gaussians * rel_noise
+    pse = metrics.PowerSpectrumError(nbins=64, log_power=True)
+    pse.update(gaussians_noise, gaussians)
+    if show_plots:
+        plt.plot(pse.aggregate.cpu().numpy())
+        plt.show()
+    assert pse.n_observations == gaussians.shape[0]
+    assert pse.aggregate.shape[0] == 64
+    assert torch.all(pse.aggregate > 0)
+
+
+@pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch not installed")
+def test_PowerSpectrumError_compute(gaussians, show_plots):
+    """Test `PowerSpectrumError.compute`."""
+    gaussians = gaussians * 1e12
+    rel_noise = torch.rand(*gaussians.shape)
+    gaussians_noise = gaussians * rel_noise
+    pse = metrics.PowerSpectrumError(nbins=64, log_power=True)
+    pse.update(gaussians_noise, gaussians)
+    val = pse.compute()
+    assert val > 0

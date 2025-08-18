@@ -29,6 +29,7 @@ __all__ = [
     "MapTotalError",
     "AsymmetryError",
     "ClumpinessError",
+    "PowerSpectrumError",
 ]
 
 
@@ -703,7 +704,7 @@ class ClumpinessError:
         kernel = torch.exp(-(xx * xx + yy * yy) / (2.0 * sigma * sigma))
         kernel = kernel / kernel.sum()
         return kernel
-    
+
     @staticmethod
     def _gaussian_blur(
         maps: torch.Tensor,
@@ -789,3 +790,327 @@ class ClumpinessError:
             return self.aggregate
         diff = (self.aggregate - self.target_aggregate).abs()
         return reduction(diff.flatten() / float(self.n_observations))
+
+
+class PowerSpectrumError:
+    """Error between radially averaged 2D power spectra.
+
+    This metric can optionally detrend, apply windows (to avoid edge leakage),
+    and computes the power spectrum of 2D maps via FFT with orthogonal norm.
+    The power spectra are radially averaged to obtain P(k) curves between kmin and kmax.
+    """
+
+    def __init__(
+        self,
+        nbins: int = 64,
+        kmin: float | None = None,
+        kmax: float | None = None,
+        log_bins: bool = False,
+        k_mode: Literal["cycles", "angular"] = "cycles",
+        pixel_size: float = 1.0,
+        detrend: bool = True,
+        window: Literal["hann"] | None = "hann",
+        log_power: bool = False,
+        per_bin_weighted: bool = True,
+        freeze_edges: bool = True,
+        eps: float = 1e-12,
+        n_observations: int = 0,
+        device: torch.device | None = None,
+        dtype: torch.dtype | None = None,
+        reduction: Callable | None = torch.mean,
+    ) -> None:
+        """Constructor.
+
+        Args:
+            nbins: Number of radial k-bins.
+            kmin: Minimum k (inclusive). If `None`, uses smallest positive k on the grid.
+            kmax: Maximum k (exclusive upper edge). If `None`, uses Nyquist.
+            log_bins: If `True`, use logarithmically spaced bin edges in `[kmin, kmax]`.
+              `kmin` must be > 0 for log bins; will be clamped to min positive k.
+            k_mode: "cycles" for cycles per unit length (default), or
+              "angular" for 2π times cycles.
+            pixel_size: Physical size per pixel. Units set k-units.
+            detrend: Subtract per-image mean before FFT.
+            window: "hann" or None.
+            log_power: If `True`, compare log10(P + eps) curves instead of linear power.
+            per_bin_weighted: If `True`, integrate curve error using bin width dk.
+            freeze_edges: If `True`, bin edges and k-bin assignment are fixed
+              after first batch.
+            eps: Numerical stability constant.
+            n_observations: Number of observations seen by the internal state.
+            device: Tensor allocation/computation device.
+            dtype: Tensor data type for internal tensors.
+            reduction: Reduction function to be used when computing metric scalar.
+        """
+        if window not in ("hann", None):
+            raise ValueError("window must be 'hann' or None")
+        if k_mode not in ("cycles", "angular"):
+            raise ValueError("k_mode must be 'cycles' or 'angular'")
+        self.nbins = int(max(1, nbins))
+        self.kmin = kmin
+        self.kmax = kmax
+        self.log_bins = bool(log_bins)
+        self.k_mode = k_mode
+        self.pixel_size = float(pixel_size)
+        self.detrend = bool(detrend)
+        self.window = window
+        self.log_power = bool(log_power)
+        self.per_bin_weighted = bool(per_bin_weighted)
+        self.freeze_edges = bool(freeze_edges)
+        self.device = torch.get_default_device() if device is None else device
+        self.dtype = dtype if dtype is not None else torch.float32
+        self.reduction = reduction
+        self.eps = float(eps)
+        self.n_observations = torch.tensor(n_observations, device=self.device)
+        self.aggregate = torch.zeros(self.nbins, device=self.device, dtype=self.dtype)
+        self.lsq_aggregate = torch.zeros(self.nbins, device=self.device, dtype=self.dtype)
+        self.max_aggregate = -torch.inf * torch.ones(
+            self.nbins, device=self.device, dtype=self.dtype
+        )
+        self.min_aggregate = torch.inf * torch.ones(
+            self.nbins, device=self.device, dtype=self.dtype
+        )
+
+        self._W: int = None  # Width of the last seen image.
+        self._H: int = None  # Height of the last seen image.
+        self._k_edges: torch.Tensor = None  # Radial k-bin edges.
+        self._dk: torch.Tensor = None  # Width of each k-bin.
+        self._bin_index: torch.Tensor = None  # Pixel-to-bin assignment.
+        self._hann2d: torch.Tensor = None  # Hann window for the last seen image.
+
+    def to(self, device: torch.device):
+        """Perform tensor device conversion for all internal tensors.
+
+        Args:
+            device: Tensor allocation/computation device.
+        """
+        self.device = device
+        self.n_observations = self.n_observations.to(device=self.device)
+        self.aggregate = self.aggregate.to(device=self.device)
+        self.lsq_aggregate = self.lsq_aggregate.to(device=self.device)
+        self.max_aggregate = self.max_aggregate.to(device=self.device)
+        self.min_aggregate = self.min_aggregate.to(device=self.device)
+
+    def reset(self, n_observations: int = 0, device: torch.device | None = None) -> None:
+        """Reset internal metrics state."""
+        self.device = device if device is not None else self.device
+        self.n_observations = torch.tensor(n_observations, device=self.device)
+        self.aggregate = torch.zeros(self.nbins, device=self.device, dtype=self.dtype)
+        self.lsq_aggregate = torch.zeros(self.nbins, device=self.device, dtype=self.dtype)
+        self.max_aggregate = -torch.inf * torch.ones(
+            self.nbins, device=self.device, dtype=self.dtype
+        )
+        self.min_aggregate = torch.inf * torch.ones(
+            self.nbins, device=self.device, dtype=self.dtype
+        )
+        self._W = None
+        self._H = None
+        self._k_edges = None
+        self._dk = None
+        self._bin_index = None
+        self._hann2d = None
+
+    @staticmethod
+    def _hann_window_1d(
+        N: int,
+        device: torch.device | str | None = None,
+        dtype: torch.dtype | None = None,
+    ) -> torch.Tensor:
+        """Create a 1D Hann window."""
+        device = torch.device(device) if device is not None else torch.device("cpu")
+        dtype = dtype = dtype if dtype is not None else torch.float32
+        if N <= 1:
+            return torch.ones((N,), dtype=dtype, device=device)
+        try:
+            return torch.hann_window(N, periodic=False, dtype=dtype, device=device)
+        except AttributeError:  # Fallback for older PyTorch versions
+            n = torch.arange(0, N, dtype=dtype, device=device)
+            return 0.5 * (1 - torch.cos(2 * torch.pi * n / (N - 1)))
+
+    @staticmethod
+    def _make_hann2d(
+        W: int,
+        H: int,
+        device: torch.device | str | None = None,
+        dtype: torch.dtype | None = None,
+    ) -> torch.Tensor:
+        """Create a 2D Hann window."""
+        device = torch.device(device) if device is not None else torch.device("cpu")
+        dtype = dtype if dtype is not None else torch.float32
+        hann_x = PowerSpectrumError._hann_window_1d(W, device=device, dtype=dtype)
+        hann_y = PowerSpectrumError._hann_window_1d(H, device=device, dtype=dtype)
+        return hann_y.view(H, 1) * hann_x.view(1, W)
+
+    def _ensure_kgrid_and_bins(
+        self,
+        W: int,
+        H: int,
+        device: torch.device | str | None = None,
+        dtype: torch.dtype | None = None,
+    ) -> None:
+        """Prepare frequency grid, bin edges, and pixel-to-bin-assignment."""
+        if (
+            (self._H, self._W) == (H, W)
+            and self._k_edges is not None
+            and self._bin_index is not None
+        ):
+            return
+
+        device = torch.device(device) if device is not None else self.device
+        dtype = dtype if dtype is not None else self.dtype
+
+        # Frequency axis arrays
+        fx = torch.fft.fftfreq(W, d=self.pixel_size, device=device, dtype=dtype)
+        fy = torch.fft.fftfreq(H, d=self.pixel_size, device=device, dtype=dtype)
+        if self.k_mode == "angular":
+            fx = 2.0 * torch.pi * fx
+            fy = 2.0 * torch.pi * fy
+
+        # Default kmin and kmax
+        kx = fx.view(1, W).expand(H, W)
+        ky = fy.view(H, 1).expand(H, W)
+        krad = torch.sqrt(kx * kx + ky * ky)
+        kflat = krad.flatten()
+        kpos = kflat[kflat > 0]
+        kmin_eff = (
+            self.kmin if self.kmin is not None else kpos.min().item() if kpos.numel() > 0 else 0.0
+        )
+        kmax_grid = float(
+            torch.max(
+                torch.sqrt(fx.max().abs() ** 2 + fy.max().abs() ** 2),
+                torch.sqrt(fx.min().abs() ** 2 + fy.min().abs() ** 2),
+            )
+        )
+        kmax_eff = self.kmax if self.kmax is not None else kmax_grid
+        if self.log_bins:
+            kmin_eff = max(kmin_eff, self.eps)
+
+        # Bin edges
+        if self.log_bins:
+            edges = torch.logspace(
+                torch.log10(torch.tensor(kmin_eff, device=device, dtype=dtype)),
+                torch.log10(torch.tensor(kmax_eff, device=device, dtype=dtype)),
+                steps=self.nbins + 1,
+                base=10.0,
+            )
+        else:
+            edges = torch.linspace(
+                torch.tensor(kmin_eff, device=device, dtype=dtype),
+                torch.tensor(kmax_eff, device=device, dtype=dtype),
+                steps=self.nbins + 1,
+            )
+
+        # Assign each pixel to a bin: idx in [0, nbins-1], or -1 if out of range
+        idx = torch.bucketize(kflat, edges) - 1
+        valid = (idx >= 0) & (idx < self.nbins)
+        idx = torch.where(valid, idx, torch.full_like(idx, -1))
+
+        # Precompute counts per bin for mean calculation
+        counts = torch.bincount(idx.clamp_min(0), minlength=self.nbins).to(dtype)
+        counts = torch.where(counts > 0, counts, torch.ones_like(counts))
+
+        # Save caches
+        self._H, self._W = H, W
+        self._k_edges = edges
+        self._dk = (edges[1:] - edges[:-1]).clamp_min(self.eps)
+        self._bin_index = idx
+        self._counts = counts
+
+        # Prepare Hann window if requested
+        if self.window == "hann":
+            self._hann2d = self._make_hann2d(H, W, device=device, dtype=dtype)
+        else:
+            self._hann2d = None
+
+    def _radial_mean_power(self, power: torch.Tensor) -> torch.Tensor:
+        """Compute radial mean of power given precomputed bin assignments.
+
+        Args:
+            power: power map for a single sample of shape (H, W).
+
+        Returns:
+            curve: mean power per radial bin of shape (nbins,).
+        """
+        assert self._bin_index is not None and self._counts is not None
+        p_flat = power.flatten()
+        idx = self._bin_index
+        valid_mask = idx >= 0
+        # Accumulate sums per bin
+        sums = torch.bincount(idx[valid_mask], weights=p_flat[valid_mask], minlength=self.nbins).to(
+            power.dtype
+        )
+        means = sums / self._counts
+        return means
+
+    @torch.no_grad()
+    def update(self, data: torch.Tensor, prediction: torch.Tensor) -> None:
+        """Accumulate batch power spectra errors.
+
+        Args:
+            data: Target maps of shape (B, H, W), (B, C, H, W) or (H, W).
+            prediction: Predicted maps of matching shape.
+        """
+        targ_ = _sanitize_ndim(data)
+        pred_ = _sanitize_ndim(prediction)
+        if pred_.shape != targ_.shape:
+            raise ValueError(f"Input shapes must match, got {targ_.shape} vs {pred_.shape}.")
+        B, H, W = targ_.shape
+
+        self._ensure_kgrid_and_bins(H, W, device=targ_.device, dtype=targ_.dtype)
+
+        # Process each sample in the batch
+        for i in range(B):
+            Ip = pred_[i]
+            It = targ_[i]
+            if self.detrend:
+                Ip = Ip - Ip.mean()
+                It = It - It.mean()
+            # Windowing
+            if self._hann2d is not None:
+                Ip = Ip * self._hann2d
+                It = It * self._hann2d
+            # FFT
+            Fp = torch.fft.fft2(Ip, norm="ortho")
+            Ft = torch.fft.fft2(It, norm="ortho")
+            Pp = Fp.real.pow(2) + Fp.imag.pow(2)
+            Pt = Ft.real.pow(2) + Ft.imag.pow(2)
+            # Radial mean curves
+            curve_p = self._radial_mean_power(Pp)
+            curve_t = self._radial_mean_power(Pt)
+            if self.log_power:
+                curve_p = torch.log10(curve_p + self.eps)
+                curve_t = torch.log10(curve_t + self.eps)
+            curve_p = curve_p / curve_p.sum().clamp_min(self.eps)
+            curve_t = curve_t / curve_t.sum().clamp_min(self.eps)
+            per_bin_err = (curve_p - curve_t).abs()
+            if self.per_bin_weighted:
+                per_bin_err = per_bin_err * self._dk
+            self.aggregate += per_bin_err
+            self.lsq_aggregate += per_bin_err.pow(2)
+            self.min_aggregate = torch.min(self.min_aggregate, per_bin_err.amin())
+            self.max_aggregate = torch.max(self.max_aggregate, per_bin_err.amax())
+            self.n_observations += 1
+
+    @property
+    def mean_per_bin(self) -> torch.Tensor:
+        """Return the mean per-bin error curve."""
+        if self.n_observations == 0:
+            return self.aggregate
+        return self.aggregate / float(self.n_observations)
+
+    @property
+    def var_per_bin(self) -> torch.Tensor:
+        """Error variance per bin."""
+        return (self.lsq_aggregate / self.n_observations) - self.mean_per_bin.pow(2)
+
+    @property
+    def std_per_bin(self) -> torch.Tensor:
+        """Error variance per bin."""
+        return self.var_per_bin.sqrt() / self.n_observations
+
+    @torch.no_grad()
+    def compute(self, reduction: Callable | None = None) -> torch.Tensor:
+        """Return the radial profile curve error reduced to a scalar."""
+        if reduction is None:
+            reduction = self.reduction
+        return reduction(self.mean_per_bin)
