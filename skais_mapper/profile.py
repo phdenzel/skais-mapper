@@ -100,6 +100,24 @@ def compute_centers(
     raise ValueError(f"Unknown center mode: {mode}")
 
 
+def half_mass_radius(maps: torch.Tensor, eps: float = 1e-12, **kwargs) -> torch.Tensor:
+    """Compute half-mass radius for a batch of images.
+
+    Args:
+        maps: Input maps of shape (B, H, W), (B, C, H, W), or (H, W).
+        eps: Numerical stability for divisions.
+        kwargs: Additional keyword arguments for `cumulative_radial_histogram`.
+    """
+    maps_ = _sanitize_ndim(maps)
+    B, H, W = maps_.shape
+    chist, edges, _ = cumulative_radial_histogram(maps_, nbins=200, **kwargs)
+    m_half = 0.5 * chist[:, -1]
+    ge = chist >= m_half.view(B, 1)
+    r = 0.5 * (edges[:, 1:] + edges[:, :-1]).clamp_min(eps)
+    r50 = torch.gather(r, 1, ge.float().argmax(dim=1, keepdim=True)).squeeze(1)
+    return r50
+
+
 def radial_histogram(
     maps: torch.Tensor,
     r: torch.Tensor | None = None,

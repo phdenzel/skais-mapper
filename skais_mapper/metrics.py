@@ -8,7 +8,7 @@ from skais_mapper.profile import (
     _sanitize_ndim,
     _make_grid,
     compute_centers,
-    cumulative_radial_histogram,
+    half_mass_radius,
     radial_pdf,
     radial_cdf,
 )
@@ -17,6 +17,7 @@ from typing import Literal, Callable, TYPE_CHECKING
 
 if TORCH_AVAILABLE or TYPE_CHECKING:
     import torch
+    import torch.nn.functional as F
 else:
     from skais_mapper import _torch_stub as __stub  # noqa
     from skais_mapper._torch_stub import *  # noqa: F401,F403
@@ -26,7 +27,41 @@ __all__ = [
     "CenterOffsetError",
     "RadialProfileCurveError",
     "MapTotalError",
+    "AsymmetryError",
+    "ClumpinessError",
 ]
+
+
+def _aperture_mask(
+    B: int,
+    H: int,
+    W: int,
+    centers: torch.Tensor,
+    r_in: torch.Tensor,
+    r_out: torch.Tensor,
+    device: torch.device | str | None = None,
+    dtype: torch.dtype | None = None,
+) -> torch.Tensor:
+    """Annular mask between r_in and r_out (inclusive) per sample of shape (B, H, W).
+
+    Args:
+        B: Batch size.
+        H: Mask height.
+        W: Mask width.
+        centers: Center coordinates of shape (B, 2) or (B, H, W).
+        r_in: Inner radius of shape (B,).
+        r_out: Outer radius of shape (B,).
+        device: Tensor allocation/computation device.
+        dtype: Tensor data type.
+    """
+    device = torch.device(device) if device is not None else torch.device("cpu")
+    dtype = dtype if dtype is not None else torch.float32
+    XX, YY = _make_grid(W, H, device=device, dtype=dtype)
+    dx = XX - centers[:, 0].view(B, 1, 1)
+    dy = YY - centers[:, 1].view(B, 1, 1)
+    r = torch.sqrt(dx * dx + dy * dy)
+    mask = (r >= r_in.view(B, 1, 1)) & (r <= r_out.view(B, 1, 1))
+    return mask.to(dtype)
 
 
 class CenterOffsetError:
@@ -54,7 +89,7 @@ class CenterOffsetError:
             normalize: Normalization mode; one of ["image_radius", "r50"].
             pixel_size: Physical size per pixel (multiplies distances).
             eps: Numerical stability for divisions.
-            n_observations: Number of observations (bins) seen by the internal state.
+            n_observations: Number of observations seen by the internal state.
             device: Tensor allocation/computation device.
             reduction: Reduction function to be used when computing metric scalar.
         """
@@ -134,14 +169,7 @@ class CenterOffsetError:
             maps: Input maps of shape (B, H, W), (B, C, H, W), or (H, W).
             eps: Numerical stability for divisions.
         """
-        maps_ = _sanitize_ndim(maps)
-        B, H, W = maps_.shape
-        chist, edges, _ = cumulative_radial_histogram(maps_, nbins=200)
-        m_half = 0.5 * chist[:, -1]
-        ge = chist >= m_half.view(B, 1)
-        r = 0.5 * (edges[:, 1:] + edges[:, :-1]).clamp_min(eps)
-        r50 = torch.gather(r, 1, ge.float().argmax(dim=1, keepdim=True)).squeeze(1)
-        return r50
+        return half_mass_radius(maps, eps=eps)
 
     @torch.no_grad()
     def update(self, data: torch.Tensor, prediction: torch.Tensor) -> None:
@@ -318,7 +346,6 @@ class MapTotalError:
         eps: float = 1e-12,
         n_observations: int = 0,
         device: torch.device | None = None,
-        reduction: Callable | None = torch.sum,
     ) -> None:
         """Constructor.
 
@@ -327,9 +354,8 @@ class MapTotalError:
               |sum(pred) - sum(target)| / (|sum(target)| + eps).
               If False, returns absolute error |sum(pred) - sum(target)|.
             eps: Numerical stability for relative error denominator.
-            n_observations: Number of observations (bins) seen by the internal state.
+            n_observations: Number of observations seen by the internal state.
             device: Tensor allocation/computation device.
-            reduction: Reduction function to be used when computing metric scalar.
         """
         self.relative = bool(relative)
         self.eps = float(eps)
@@ -388,3 +414,378 @@ class MapTotalError:
         if self.n_observations == 0:
             return self.aggregate
         return self.aggregate / float(self.n_observations)
+
+
+class AsymmetryError:
+    """Asymmetry (A) metric difference between predicted and target maps.
+
+    A = sum(|I - I_180| within aperture) / (sum(|I| within aperture) + eps)
+
+    The 180-degree rotation is performed about a chosen center:
+    - center_mode="image_center": uses geometric image center and fast flip.
+    - center_mode="centroid": uses center-of-mass per map; rotation via bilinear sampling.
+
+    Aperture:
+    - aperture="full": use the entire image.
+    - aperture="r_factor": use a circular aperture with radius r_factor * R50,
+      where R50 is the half-mass radius measured on the same map and center.
+    """
+
+    def __init__(
+        self,
+        center_mode: Literal["image_center", "centroid"] = "image_center",
+        aperture: Literal["full", "r_factor"] = "r_factor",
+        r_factor: float = 1.5,
+        eps: float = 1e-12,
+        n_observations: int = 0,
+        device: torch.device | None = None,
+        reduction: Callable | None = torch.mean,
+    ) -> None:
+        """Constructor.
+
+        Args:
+            center_mode: Centering mode for rotation; one of `["centroid", "image_center"]`.
+            aperture: Aperture for error calculation; one of `["full" or "r_factor"]`.
+            r_factor: Multiplier for R50 if `aperture="r_factor"`.
+            eps: Numerical stability.
+            n_observations: Number of observations seen by the internal state.
+            device: Tensor allocation/computation device.
+            reduction: Reduction function to be used when computing metric scalar.
+        """
+        if center_mode not in ("image_center", "centroid"):
+            raise ValueError("center_mode must be 'image_center' or 'centroid'")
+        if aperture not in ("full", "r_factor"):
+            raise ValueError("aperture must be 'full' or 'r_factor'")
+        self.device = torch.get_default_device() if device is None else device
+        self.reduction = reduction
+        self.center_mode = center_mode
+        self.aperture = aperture
+        self.r_factor = float(r_factor)
+        self.eps = float(eps)
+        self.n_observations = torch.tensor(n_observations, device=self.device)
+        self.aggregate = None
+        self.target_aggregate = None
+
+    def to(self, device: torch.device):
+        """Perform tensor device conversion for all internal tensors.
+
+        Args:
+            device: Tensor allocation/computation device.
+        """
+        self.device = device
+        self.n_observations = self.n_observations.to(device=self.device)
+        self.aggregate = (
+            self.aggregate.to(device=self.device) if self.aggregate is not None else None
+        )
+        self.target_aggregate = (
+            self.target_aggregate.to(device=self.device)
+            if self.target_aggregate is not None
+            else None
+        )
+
+    def reset(self, n_observations: int = 0, device: torch.device | None = None) -> None:
+        """Reset internal metrics state."""
+        self.device = device if device is not None else self.device
+        self.n_observations = torch.tensor(n_observations, device=self.device)
+        self.aggregate = None
+        self.target_aggregate = None
+
+    @staticmethod
+    def _rotate_about_center(
+        maps: torch.Tensor,
+        center: torch.Tensor,
+        eps: float = 1e-12,
+    ) -> torch.Tensor:
+        """Rotate maps by 180 degrees about a given center.
+
+        Args:
+            maps: Input maps of shape (B, H, W), (B, C, H, W), or (H, W).
+            center: Center coordinates of shape (B, 2).
+            eps: Numerical stability for divisions.
+        """
+        maps_ = _sanitize_ndim(maps)
+        B, H, W = maps_.shape
+        XX, YY = _make_grid(W, H, device=maps_.device, dtype=maps_.dtype)
+        x_prime = 2 * center[:, 0].view(B, 1, 1) - XX
+        y_prime = 2 * center[:, 1].view(B, 1, 1) - YY
+        x_norm = 2 * x_prime / max(W - 1, 1) - 1
+        y_norm = 2 * y_prime / max(H - 1, 1) - 1
+        grid = torch.stack((x_norm, y_norm), dim=-1)
+        maps_ = maps_.unsqueeze(1)
+        rot = F.grid_sample(maps_, grid, mode="bilinear", padding_mode="border", align_corners=True)
+        return rot[:, 0, :, :]
+
+    @torch.no_grad()
+    def update(self, data: torch.Tensor, prediction: torch.Tensor) -> None:
+        """Accumulate batch asymmetry errors.
+
+        Args:
+            data: Target maps of shape (B, H, W), (B, C, H, W) or (H, W).
+            prediction: Predicted maps of matching shape.
+        """
+        targ_ = _sanitize_ndim(data)
+        pred_ = _sanitize_ndim(prediction)
+        if pred_.shape != targ_.shape:
+            raise ValueError(f"Input shapes must match, got {targ_.shape} vs {pred_.shape}.")
+        B, H, W = pred_.shape
+        # Centers
+        XX, YY = _make_grid(W, H, device=targ_.device, dtype=targ_.dtype)
+        centers_t = compute_centers(targ_, XX, YY, eps=self.eps, mode=self.center_mode)
+        centers_p = compute_centers(pred_, XX, YY, eps=self.eps, mode=self.center_mode)
+        # Rotate maps by 180 degrees about their centers
+        if self.center_mode == "image_center":
+            targ_rot = torch.flip(targ_, dims=(-2, -1))
+            pred_rot = torch.flip(pred_, dims=(-2, -1))
+        elif self.center_mode == "centroid":
+            targ_rot = self._rotate_about_center(targ_, centers_t, eps=self.eps)
+            pred_rot = self._rotate_about_center(pred_, centers_p, eps=self.eps)
+        # Aperture masks
+        if self.aperture == "full":
+            mask_p = torch.ones_like(pred_)
+            mask_t = torch.ones_like(targ_)
+        elif self.aperture == "r_factor":
+            # r_factor * R50 using each map's own center
+            r50_p = half_mass_radius(pred_, eps=self.eps, center_mode=self.center_mode)
+            r50_t = half_mass_radius(targ_, eps=self.eps, center_mode=self.center_mode)
+            r_out_p = (self.r_factor * r50_p).clamp_min(1.0)
+            r_out_t = (self.r_factor * r50_t).clamp_min(1.0)
+            zero = torch.zeros_like(r_out_p)
+            mask_p = _aperture_mask(
+                B, H, W, centers_p, zero, r_out_p, device=targ_.device, dtype=targ_.dtype
+            )
+            mask_t = _aperture_mask(
+                B, H, W, centers_t, zero, r_out_t, device=targ_.device, dtype=targ_.dtype
+            )
+        # Asymmetry maps
+        err_p = mask_p * (pred_ - pred_rot).abs()
+        rel_p = (mask_p * pred_.abs()).flatten(1).sum(dim=1)
+        A_p = err_p / rel_p.clamp_min(self.eps).view(B, 1, 1)
+        err_t = mask_t * (targ_ - targ_rot).abs()
+        rel_t = (mask_t * targ_.abs()).flatten(1).sum(dim=1)
+        A_t = err_t / rel_t.clamp_min(self.eps).view(B, 1, 1)
+        # Aggregate per sample asymmetries
+        if self.aggregate is None:
+            self.aggregate = A_p.sum(dim=0)
+        else:
+            self.aggregate += A_p.sum(dim=0)
+        if self.target_aggregate is None:
+            self.target_aggregate = A_t.sum(dim=0)
+        else:
+            self.target_aggregate += A_t.sum(dim=0)
+        self.n_observations += B
+
+    def compute(self, reduction: Callable | None = None) -> torch.Tensor | None:
+        """Return the mean total quantity error over all seen samples."""
+        if reduction is None:
+            reduction = self.reduction
+        if self.n_observations == 0:
+            return self.aggregate
+        diff = (self.aggregate - self.target_aggregate).abs()
+        return reduction(diff.flatten() / float(self.n_observations))
+
+
+class ClumpinessError:
+    """Smoothness/Clumpiness difference between two different 2D maps.
+
+    S = sum(max(I - I_s, 0) within annulus) / (sum(I within annulus) + eps)
+
+    The smoothed map I_s is computed via Gaussian blur with a configurable sigma:
+    - sigma_mode="pixels": sigma is given in pixels (constant for all samples).
+    - sigma_mode="r_factor": sigma = s_factor * R50 (per sample), where R50 is
+      measured around the chosen center (image center or centroid).
+
+    The annulus is defined by [r_inner, r_outer]:
+    - r_inner = inner_excision * R50  (commonly ~0.2)
+    - r_outer = aperture_factor * R50 (commonly ~1.5)
+      If aperture_factor <= inner_excision, the annulus collapses to empty.
+    """
+
+    def __init__(
+        self,
+        center_mode: Literal["image_center", "centroid"] = "image_center",
+        sigma_mode: Literal["pixels", "r_factor"] = "pixels",
+        sigma_pixels: float = 1.0,
+        r_factor: float = 1.5,
+        inner_excision: float = 0.2,
+        eps: float = 1e-12,
+        n_observations: int = 0,
+        device: torch.device | None = None,
+        reduction: Callable | None = torch.mean,
+    ) -> None:
+        """Constructor.
+
+        Args:
+            center_mode: Centering mode for defining R50 and annulus center;
+              one of `["centroid", "image_center"]`..
+            sigma_mode: "pixels" or "r_factor" for the smoothing scale.
+            sigma_pixels: Gaussian sigma in pixels when sigma_mode="pixels".
+            r_factor: Outer radius multiple of R50 for the annulus (e.g., 1.5).
+            inner_excision: Inner exclusion multiple of R50 (e.g., 0.2).
+            eps: Numerical stability.
+            n_observations: Number of observations seen by the internal state.
+            device: Tensor allocation/computation device.
+            reduction: Reduction function to be used when computing metric scalar.
+        """
+        if center_mode not in ("image_center", "centroid"):
+            raise ValueError("center_mode must be 'image_center' or 'centroid'")
+        if sigma_mode not in ("pixels", "r_factor"):
+            raise ValueError("sigma_mode must be 'pixels' or 'r_factor'")
+        self.device = torch.get_default_device() if device is None else device
+        self.reduction = reduction
+        self.center_mode = center_mode
+        self.sigma_mode = sigma_mode
+        self.sigma_pixels = float(sigma_pixels)
+        self.r_factor = float(r_factor)
+        self.inner_excision = float(inner_excision)
+        self.eps = float(eps)
+        self.n_observations = torch.tensor(n_observations, device=self.device)
+        self.aggregate = None
+        self.target_aggregate = None
+
+    def to(self, device: torch.device):
+        """Perform tensor device conversion for all internal tensors.
+
+        Args:
+            device: Tensor allocation/computation device.
+        """
+        self.device = device
+        self.n_observations = self.n_observations.to(device=self.device)
+        self.aggregate = (
+            self.aggregate.to(device=self.device) if self.aggregate is not None else None
+        )
+        self.target_aggregate = (
+            self.target_aggregate.to(device=self.device)
+            if self.target_aggregate is not None
+            else None
+        )
+
+    def reset(self, n_observations: int = 0, device: torch.device | None = None) -> None:
+        """Reset internal metrics state."""
+        self.device = device if device is not None else self.device
+        self.n_observations = torch.tensor(n_observations, device=self.device)
+        self.aggregate = None
+        self.target_aggregate = None
+
+    def sigma(
+        self,
+        batch_size: int,
+        r50: torch.Tensor | None = None,
+        device: torch.device | None = None,
+        dtype: torch.dtype | None = None,
+    ) -> torch.Tensor:
+        """Get the Gaussian kernel sigma tensor for blurring."""
+        device = torch.device(device) if device is not None else torch.device("cpu")
+        dtype = dtype if dtype is not None else torch.float32
+        if self.sigma_mode == "pixels":
+            return torch.full((batch_size,), self.sigma_pixels, device=device, dtype=dtype)
+        elif self.sigma_mode == "r_factor":
+            if r50 is None:
+                raise ValueError("r50 must be provided when sigma_mode='r_factor'.")
+            return (self.r_factor * r50).clamp_min(0.1).to(device=device, dtype=dtype)
+
+    @staticmethod
+    def _gaussian_kernel2d(
+        sigma: float,
+        device: torch.device | str | None = None,
+        dtype: torch.dtype | None = None,
+    ) -> torch.Tensor:
+        """Create a 2D Gaussian kernel normalized to sum=1 of size = 2*ceil(3*sigma)+1."""
+        device = torch.device(device) if device is not None else torch.device("cpu")
+        dtype = dtype if dtype is not None else torch.float32
+        if sigma <= 0:
+            # Degenerate kernel -> identity in convolution; we'll skip conv in that case.
+            k = torch.zeros((1, 1), dtype=dtype, device=device)
+            k[0, 0] = 1.0
+            return k
+        radius = int(torch.ceil(torch.tensor(3.0 * sigma)).item())
+        ax = torch.arange(-radius, radius + 1, device=device, dtype=dtype)
+        xx, yy = torch.meshgrid(ax, ax, indexing="ij")
+        kernel = torch.exp(-(xx * xx + yy * yy) / (2.0 * sigma * sigma))
+        kernel = kernel / kernel.sum()
+        return kernel
+    
+    @staticmethod
+    def _gaussian_blur(
+        maps: torch.Tensor,
+        sigma: torch.Tensor,
+        eps: float = 1e-12,
+    ) -> torch.Tensor:
+        """Rotate maps by 180 degrees about a given center.
+
+        Args:
+            maps: Input maps of shape (B, H, W), (B, C, H, W), or (H, W).
+            sigma: Gaussian kernel sigmas (B,).
+            eps: Numerical stability for divisions.
+        """
+        maps_ = _sanitize_ndim(maps)
+        B, H, W = maps_.shape
+        blurred = []
+        for i in range(B):
+            if sigma[i] <= 0:
+                blurred.append(maps_[i : i + 1, :, :])
+                continue
+            k = ClumpinessError._gaussian_kernel2d(
+                sigma=sigma[i].item(), dtype=maps_.dtype, device=maps_.device
+            )
+            k = k.view(1, 1, k.shape[0], k.shape[1])
+            pad_h = (k.shape[2] - 1) // 2
+            pad_w = (k.shape[3] - 1) // 2
+            x = F.pad(maps[i].unsqueeze(0), (pad_w, pad_w, pad_h, pad_h), mode="reflect")
+            y = F.conv2d(x, k)
+            blurred.append(y.squeeze(1))
+        return torch.cat(blurred, dim=0)
+
+    @torch.no_grad()
+    def update(self, data: torch.Tensor, prediction: torch.Tensor) -> None:
+        """Accumulate batch asymmetry errors.
+
+        Args:
+            data: Target maps of shape (B, H, W), (B, C, H, W) or (H, W).
+            prediction: Predicted maps of matching shape.
+        """
+        targ_ = _sanitize_ndim(data)
+        pred_ = _sanitize_ndim(prediction)
+        if pred_.shape != targ_.shape:
+            raise ValueError(f"Input shapes must match, got {targ_.shape} vs {pred_.shape}.")
+        B, H, W = targ_.shape
+        # Aperture mask
+        XX, YY = _make_grid(W, H, device=targ_.device, dtype=targ_.dtype)
+        centers = compute_centers(targ_, XX, YY, eps=self.eps, mode=self.center_mode)
+        r50_t = half_mass_radius(targ_, eps=self.eps, center_mode=self.center_mode)
+        r_in = (self.inner_excision * r50_t).clamp_min(0.0)
+        r_out = (self.r_factor * r50_t).clamp_min(1.0)
+        ann_mask = _aperture_mask(
+            B, H, W, centers, r_in, r_out, device=targ_.device, dtype=targ_.dtype
+        )
+        # Smoothing sigmas
+        sigmas_t = self.sigma(B, r50=r50_t, device=targ_.device, dtype=targ_.dtype)
+        sigmas_p = sigmas_t
+        # Blur each sample (per-sample sigma)
+        blur_t = self._gaussian_blur(targ_, sigmas_t, self.eps)
+        blur_p = self._gaussian_blur(pred_, sigmas_p, self.eps)
+        # Smoothness values per sample (positive residuals only)
+        resid_p = ann_mask * (pred_ - blur_p).clamp_min(0.0)
+        rel_p = (ann_mask * pred_.abs()).flatten(1).sum(dim=1)
+        resid_t = ann_mask * (targ_ - blur_t).clamp_min(0.0)
+        rel_t = (ann_mask * targ_.abs()).flatten(1).sum(dim=1)
+        S_p = resid_p / rel_p.clamp_min(self.eps).view(B, 1, 1)
+        S_t = resid_t / rel_t.clamp_min(self.eps).view(B, 1, 1)
+        # Aggregate per sample smoothness
+        if self.aggregate is None:
+            self.aggregate = S_p.sum(dim=0)
+        else:
+            self.aggregate += S_p.sum(dim=0)
+        if self.target_aggregate is None:
+            self.target_aggregate = S_t.sum(dim=0)
+        else:
+            self.target_aggregate += S_t.sum(dim=0)
+        self.n_observations += B
+
+    def compute(self, reduction: Callable | None = None) -> torch.Tensor | None:
+        """Return the mean total quantity error over all seen samples."""
+        if reduction is None:
+            reduction = self.reduction
+        if self.n_observations == 0:
+            return self.aggregate
+        diff = (self.aggregate - self.target_aggregate).abs()
+        return reduction(diff.flatten() / float(self.n_observations))

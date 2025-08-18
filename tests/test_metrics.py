@@ -12,10 +12,84 @@ import matplotlib.pyplot as plt
 if TORCH_AVAILABLE or TYPE_CHECKING:
     import torch
     import skais_mapper.metrics as metrics
-    from skais_mapper.profile import _make_grid, radial_pdf, cumulative_radial_histogram
+    from skais_mapper.profile import (
+        _make_grid,
+        radial_pdf,
+        cumulative_radial_histogram
+    )
 else:
     from skais_mapper import _torch_stub as _stub  # noqa
     from skais_mapper._torch_stub import *  # noqa: F401,F403
+
+
+
+def build_triangle_test_tensor(
+    W: int = 512,
+    H: int = 512,
+    invert_center: bool = False,
+    device: torch.device | str = "cpu",
+    dtype: torch.dtype = torch.float32,
+) -> torch.Tensor:
+    """Create a batch of 2D map tensors containing a filled triangle.
+
+    Output shape matches (1, 1, W, H) as requested.
+
+    Args:
+        W: Width of the image.
+        H: Height of the image.
+        invert_center: If True, intensity is highest at the center and decreases outward.
+                       If False (default), intensity is lowest at the center and increases outward.
+        device: Torch device.
+        dtype: Torch dtype.
+
+    Returns:
+        Tensor of shape (1, 1, W, H) with values in [0, 1].
+    """
+    B = 1
+    device = torch.device(device)
+    # Coordinate grid (H, W)
+    ys = torch.arange(H, device=device, dtype=dtype).unsqueeze(1).expand(H, W)
+    xs = torch.arange(W, device=device, dtype=dtype).unsqueeze(0).expand(H, W)
+
+    # Radial gradient from center, normalized to [0,1]
+    cx = (W - 1) / 2.0
+    cy = (H - 1) / 2.0
+    r = torch.sqrt((xs - cx) ** 2 + (ys - cy) ** 2)
+    r_max = torch.sqrt(torch.tensor(cx**2 + cy**2, device=device, dtype=dtype))
+    grad = (r / r_max).clamp(0, 1)
+    if invert_center:
+        grad = 1.0 - grad
+
+    # Define a CCW triangle centered roughly in the image
+    # Top, bottom-left, bottom-right
+    v0 = (cx, cy - 0.25 * torch.rand(1) * min(W, H))
+    v1 = (cx - 0.30 * torch.rand(1) * W, cy + 0.30 * torch.rand(1) * H)
+    v2 = (cx + 0.30 * torch.rand(1) * W, cy + 0.30 * torch.rand(1) * H)
+
+    def edge_fn(x, y, x0, y0, x1, y1):
+        # Signed area of the parallelogram (cross product 2D)
+        return (x - x1) * (y0 - y1) - (y - y1) * (x0 - x1)
+
+    # Compute half-space tests
+    e0 = edge_fn(xs, ys, *v0, *v1)
+    e1 = edge_fn(xs, ys, *v1, *v2)
+    e2 = edge_fn(xs, ys, *v2, *v0)
+
+    # Inside test that tolerates either orientation (>= 0 all or <= 0 all)
+    inside_pos = (e0 >= 0) & (e1 >= 0) & (e2 >= 0)
+    inside_neg = (e0 <= 0) & (e1 <= 0) & (e2 <= 0)
+    mask = (inside_pos | inside_neg).to(dtype)
+
+    # Compose image: gradient inside triangle, zero outside
+    img_hw = grad * mask  # (H, W) in [0,1]
+
+    # Expand to (B, 1, W, H) to match your rotation function's expected shape
+    # Note: PyTorch convention is (B, C, H, W); if your function expects (B, 1, W, H),
+    # we permute accordingly.
+    img_b1hw = img_hw.unsqueeze(0).unsqueeze(0).expand(B, 1, H, W)  # (B,1,H,W)
+    img_b1wh = img_b1hw.permute(0, 1, 3, 2)  # (B,1,W,H)
+
+    return img_b1wh.contiguous()
 
 
 def generate_gaussian2d_batch(
@@ -139,7 +213,6 @@ def test_CenterOffsetError_compute(gaussians, show_plots):
     assert val > 0
     assert val < coe.max_aggregate
     assert coe.min_aggregate < val
-    print(val)
 
 
 @pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch not installed")
@@ -218,3 +291,117 @@ def test_MapTotalError_update(gaussians):
     assert mte.n_observations == gaussians.shape[0]
     assert mte.max_aggregate > mte.min_aggregate
     assert mte.aggregate > 0
+
+
+@pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch not installed")
+def test_AsymmetryError_rotate_about_center(show_plots):
+    """Test `AsymmetryError.rotate_about_center`."""
+    maps = torch.cat([
+        build_triangle_test_tensor(512, 512, invert_center=True) for _ in range(6)
+    ], dim=0)
+
+    ae = metrics.AsymmetryError()
+    center = metrics.CenterOffsetError._com_xy(maps)
+    maps_rot = ae._rotate_about_center(maps, center)
+    assert maps.shape[0] == maps_rot.shape[0]
+    assert maps.shape[2:] == maps_rot.shape[1:]
+    if show_plots:
+        for i in range(maps.shape[0]):
+            plt.imshow(maps[i].squeeze((0, 1)).cpu().numpy())
+            plt.show()
+            plt.imshow(maps_rot[i].squeeze(0).cpu().numpy())
+            plt.show()
+
+
+@pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch not installed")
+def test_AsymmetryError_update(show_plots):
+    """Test `MapTotalError.update`."""
+    maps = torch.cat([
+        build_triangle_test_tensor(512, 512, invert_center=True) for _ in range(6)
+    ], dim=0)
+    maps = maps * 1e12
+    rel_noise = torch.rand(*maps.shape)
+    maps_noise = maps * rel_noise
+    ae = metrics.AsymmetryError(r_factor=1.5)
+    ae.update(maps_noise, maps)
+    if show_plots:
+        plt.imshow(ae.aggregate.cpu().numpy())
+        plt.show()
+        plt.imshow(ae.target_aggregate.cpu().numpy())
+        plt.show()
+    assert ae.n_observations == maps.shape[0]
+    assert ae.aggregate.shape == maps.shape[2:]
+    assert ae.target_aggregate.shape == maps.shape[2:]
+
+
+@pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch not installed")
+def test_AsymmetryError_compute(show_plots):
+    """Test `MapTotalError.update`."""
+    maps = torch.cat([
+        build_triangle_test_tensor(512, 512, invert_center=True) for _ in range(6)
+    ], dim=0)
+    rel_noise = torch.rand(*maps.shape)
+    maps_noise = maps * rel_noise
+    ae = metrics.AsymmetryError(r_factor=1.5, reduction=torch.sum)
+    ae.update(maps_noise, maps)
+    val = ae.compute()
+    assert val > 0
+
+
+@pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch not installed")
+def test_ClumpinessError_gaussian_blur(show_plots):
+    """Test `ClumpinessError._gaussian_blur`."""
+    maps = torch.cat([
+        build_triangle_test_tensor(512, 512, invert_center=True) for _ in range(6)
+    ], dim=0)
+    rel_noise = torch.rand(*maps.shape)
+    maps_noise = maps * rel_noise
+    ce = metrics.ClumpinessError(sigma_pixels=10)
+    blurred = ce._gaussian_blur(
+        maps_noise, ce.sigma(maps.shape[0], device=maps.device, dtype=maps.dtype)
+    )
+    if show_plots:
+        for i in range(maps_noise.shape[0]):
+            plt.imshow(maps_noise[i].squeeze(0).cpu().numpy())
+            plt.show()
+            plt.imshow(blurred[i].squeeze(0).cpu().numpy())
+            plt.show()
+    assert blurred.shape[0] == maps_noise.shape[0]
+    assert blurred.shape[1:] == maps_noise.shape[2:]
+
+
+@pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch not installed")
+def test_ClumpinessError_update(show_plots):
+    """Test `ClumpinessError.update`."""
+    maps = torch.cat([
+        build_triangle_test_tensor(512, 512, invert_center=True) for _ in range(6)
+    ], dim=0)
+    rel_noise = torch.rand(*maps.shape)
+    maps_noise = maps * rel_noise
+    ce = metrics.ClumpinessError(sigma_pixels=10)
+    ce.update(maps_noise, maps)
+    if show_plots:
+        plt.imshow(ce.aggregate.cpu().numpy())
+        plt.show()
+        plt.imshow(ce.target_aggregate.cpu().numpy())
+        plt.show()
+    assert ce.n_observations == maps.shape[0]
+    assert ce.aggregate.shape == maps.shape[2:]
+    assert ce.target_aggregate.shape == maps.shape[2:]
+
+
+@pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch not installed")
+def test_ClumpinessError_compute(show_plots):
+    """Test `ClumpinessError.compute`."""
+    maps = torch.cat([
+        build_triangle_test_tensor(512, 512, invert_center=True) for _ in range(6)
+    ], dim=0)
+    maps = maps * 1e12
+    rel_noise = torch.rand(*maps.shape)
+    maps_noise = maps * rel_noise
+    ce = metrics.ClumpinessError(
+        sigma_mode="pixels", sigma_pixels=10, reduction=torch.sum
+    )
+    ce.update(maps_noise, maps)
+    val = ce.compute()
+    assert val > 0
