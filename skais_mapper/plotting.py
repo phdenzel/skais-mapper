@@ -178,6 +178,9 @@ def _plot_data(
     if "extent" in info and extent is None:
         extent = info["extent"]
     plt.figure(figsize=figsize, dpi=dpi)
+    if kwargs.get("norm", None) == "log":
+        finite = np.isfinite(data) & (data > 0)
+        data = np.ma.masked_where(~finite, data)
     img = plt.imshow(data, cmap=colormap, extent=extent, **kwargs)
     if colorbar:
         if colorbar_label is None:
@@ -187,7 +190,10 @@ def _plot_data(
         colorbar_label = colorbar_label.replace("solMass", "M" + r"$_{\odot}$").replace(
             "2", "\u00b2"
         )
-        plt.colorbar(label=colorbar_label)
+        try:
+            plt.colorbar(img, label=colorbar_label)
+        except ValueError:
+            pass
     if "units_extent" in info and xlabel is None:
         xlabel = f"[{info['units_extent']}]"
     if "units_extent" in info and ylabel is None:
