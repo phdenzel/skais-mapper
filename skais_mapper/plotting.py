@@ -301,7 +301,7 @@ def plot_image_tensor(
     metadata = kwargs.pop("info", {})
     data, metadata = _from_batch(data, metadata=metadata, batch_idx=batch_idx)
     _plot_data(
-        data.numpy(),
+        data,
         metadata,
         extent=extent,
         colormap=colormap,
