@@ -178,9 +178,6 @@ def _plot_data(
     if "extent" in info and extent is None:
         extent = info["extent"]
     plt.figure(figsize=figsize, dpi=dpi)
-    if kwargs.get("norm", None) == "log":
-        finite = np.isfinite(data) & (data > 0)
-        data = np.ma.masked_where(~finite, data)
     img = plt.imshow(data, cmap=colormap, extent=extent, **kwargs)
     if colorbar:
         if colorbar_label is None:
@@ -304,7 +301,7 @@ def plot_image_tensor(
     metadata = kwargs.pop("info", {})
     data, metadata = _from_batch(data, metadata=metadata, batch_idx=batch_idx)
     _plot_data(
-        data,
+        data.numpy(),
         metadata,
         extent=extent,
         colormap=colormap,
