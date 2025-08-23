@@ -15,6 +15,9 @@ import skais_mapper.plotting as plotting
 def fake_plt(monkeypatch):
     """Fixture to mock matplotlib.pyplot."""
     mock_plt = MagicMock()
+    mock_fig = MagicMock()
+    mock_ax = MagicMock()
+    mock_plt.subplots.return_value = (mock_fig, mock_ax)
     monkeypatch.setattr(plotting, "plt", mock_plt)
     return mock_plt
 
@@ -244,7 +247,7 @@ def test_plot_data_basic(fake_cmap, fake_plt):
     arr = np.ones((4, 4))
     info = {"class": "gas"}
     plotting._plot_data(arr, info, show=False, colorbar=True)
-    plotting.plt.figure.assert_called()
+    plotting.plt.subplots.assert_called()
 
 
 def test_plot_data_with_extent_and_labels(fake_cmap, fake_plt):
@@ -252,7 +255,7 @@ def test_plot_data_with_extent_and_labels(fake_cmap, fake_plt):
     arr = np.ones((4, 4))
     info = {"class": "gas", "extent": [-1, 1, -1, 1], "units_extent": "kpc", "units": "solMass"}
     plotting._plot_data(arr, info, extent=None, xlabel="X", ylabel="Y", colorbar=True)
-    plotting.plt.figure.assert_called()
+    plotting.plt.subplots.assert_called()
 
 
 def test_plot_data_with_extent_and_labels_from_info(fake_cmap, fake_plt):
@@ -260,7 +263,7 @@ def test_plot_data_with_extent_and_labels_from_info(fake_cmap, fake_plt):
     arr = np.ones((4, 4))
     info = {"class": "gas", "extent": [-1, 1, -1, 1], "units_extent": "kpc", "units": "solMass"}
     plotting._plot_data(arr, info, extent=None, colorbar=True)
-    plotting.plt.figure.assert_called()
+    plotting.plt.subplots.assert_called()
 
 
 def test_plot_data_with_colorbar_label(fake_cmap, fake_plt):
@@ -268,8 +271,8 @@ def test_plot_data_with_colorbar_label(fake_cmap, fake_plt):
     arr = np.ones((4, 4))
     info = {"class": "gas", "units": "solMass"}
     plotting._plot_data(arr, info, colorbar=True, colorbar_label="mylabel2")
-    assert plotting.plt.colorbar.called
-    label = plotting.plt.colorbar.call_args[1]["label"]
+    assert plotting.plt.subplots()[0].colorbar.called
+    label = plotting.plt.subplots()[0].colorbar.call_args[1]["label"]
     assert "M" in label or "2" in label or "mylabel" in label
 
 
