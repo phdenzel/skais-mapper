@@ -10,16 +10,18 @@ import astropy.units as au
 from skais_mapper.utils import SkaisColorMaps, get_run_id, alias_kw
 from matplotlib import colormaps
 from matplotlib import pyplot as plt
+from matplotlib.axes import Axes
 from matplotlib.image import AxesImage
 from matplotlib.colors import Colormap
+from matplotlib.font_manager import FontProperties
+from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 from functools import singledispatch
-from typing import Any, TYPE_CHECKING
+from typing import Any, Literal, TYPE_CHECKING
 from collections.abc import Sequence
 from skais_mapper._compat import TORCH_AVAILABLE
 
 if TORCH_AVAILABLE or TYPE_CHECKING:
     import torch
-    from torch import Tensor
 
 
 def _from_batch(
@@ -133,15 +135,32 @@ def _symbol_from_class(class_type: str | None = None):
 @alias_kw("colormap", "cmap")
 @alias_kw("colorbar", "cbar")
 @alias_kw("colorbar_label", "cbar_label")
+@alias_kw("colorbar_ax", "cbar_ax")
+@alias_kw("colorbar_pad", "cbar_pad")
+@alias_kw("colorbar_loc", "cbar_loc")
 def _plot_data(
     data: np.ndarray,
     info: dict = {},
+    ax: Axes | None = None,
     extent: Sequence[float] | None = None,
     colormap: None = None,
     colorbar: bool = False,
     colorbar_label: str | None = None,
+    colorbar_ax: Axes | None = None,
+    colorbar_pad: float | None = None,
+    colorbar_loc: Literal["left", "right"] = "right",
     xlabel: str | None = None,
     ylabel: str | None = None,
+    scalebar: bool = False,
+    scalebar_label: str | None = None,
+    scalebar_fontsize: float | None = None,
+    scalebar_r: float = 0.25,
+    scalebar_h: float = 0.075,
+    scalebar_pad: float = 0.3,
+    scalebar_loc: Literal[
+        "upper left", "upper right", "lower left", "lower right", "center"
+    ] = "lower right",
+    scalebar_color: str = "black",
     savefig: bool = False,
     path: str | Path | None = None,
     show: bool = False,
@@ -154,12 +173,25 @@ def _plot_data(
     Args:
         data: Array(s) of a map (or maps).
         info: Supplementary information about the data.
+        ax: Optional matplotlib Axes to draw into. If `None`, a new figure/axes is created.
         extent: Extent of the map in physical units.
         colormap: Name of the colormap to use for plotting.
         colorbar: If `True`, include the colorbar in the plot.
         colorbar_label: Label of the colorbar (if enabled).
+        colorbar_ax: Optional matplotlib Axes to draw the colorbar into.
+          If `None`, defaults to `ax`.
+        colorbar_pad: Colorbar padding.
+        colorbar_loc: Colorbar location.
         xlabel: Label of the x-axis.
         ylabel: Label of the y-axis.
+        scalebar: Use the a scalebar (usually makes x/yticks unnecessary).
+        scalebar_label: Scale bar label; if `None`, physical extent unit is used.
+        scalebar_fontsize: Font size of the scalebar label.
+        scalebar_r: Scale bar length fraction of the image data.
+        scalebar_h: Scale bar vertical size (in units of transform coordinate system).
+        scalebar_pad: Padding around the label and size bar (in fraction of the font size).
+        scalebar_loc: Location of the size bar.
+        scalebar_color: Color of the scale bar.
         savefig: If `True`, save the plot to file.
         path: Filename or filepath where the figure is saved.
         show: If `True`, show the plot.
@@ -177,9 +209,13 @@ def _plot_data(
     colormap = _get_cmap(colormap, info["class"] if "class" in info else None, under="k", bad="k")
     if "extent" in info and extent is None:
         extent = info["extent"]
-    plt.figure(figsize=figsize, dpi=dpi)
-    img = plt.imshow(data, cmap=colormap, extent=extent, **kwargs)
+    if ax is None:
+        fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
+    else:
+        fig = ax.figure
+    img = ax.imshow(data, cmap=colormap, extent=extent, **kwargs)
     if colorbar:
+        cbar_kw = {"location": colorbar_loc}
         if colorbar_label is None:
             colorbar_label = _symbol_from_class(info.get("class", None))
             if "units" in info:
@@ -187,8 +223,15 @@ def _plot_data(
         colorbar_label = colorbar_label.replace("solMass", "M" + r"$_{\odot}$").replace(
             "2", "\u00b2"
         )
+        cbar_kw["label"] = colorbar_label
+        if colorbar_pad is not None:
+            cbar_kw["pad"] = colorbar_pad
+        if colorbar_ax is not None:
+            cbar_kw["cax"] = colorbar_ax
+        else:
+            cbar_kw["ax"] = ax
         try:
-            plt.colorbar(img, label=colorbar_label)
+            fig.colorbar(img, **cbar_kw)
         except ValueError:
             pass
     if "units_extent" in info and xlabel is None:
@@ -196,22 +239,45 @@ def _plot_data(
     if "units_extent" in info and ylabel is None:
         ylabel = f"[{info['units_extent']}]"
     if xlabel is not None:
-        plt.xlabel(xlabel)
+        ax.set_xlabel(xlabel)
     if ylabel is not None:
-        plt.ylabel(ylabel)
+        ax.set_ylabel(ylabel)
+    if scalebar:
+        if scalebar_label is None and "units_extent" in info:
+            scalebar_label = f"{info['units_extent']}"
+        elif scalebar_label is None:
+            scalebar_label = "px"
+        scalebar_len = round(
+            float(extent[1] - extent[0]) * scalebar_r if extent is not None
+            else scalebar_r * data.shape[1]
+        )
+        fp = FontProperties(size=scalebar_fontsize) if scalebar_fontsize else None
+        bar = AnchoredSizeBar(
+            transform=ax.transData,
+            size=scalebar_len,
+            label=f"{scalebar_len:g} {scalebar_label}",
+            label_top=True,
+            loc=scalebar_loc,
+            pad=scalebar_pad,
+            color=scalebar_color,
+            frameon=False,
+            size_vertical=scalebar_h,
+            fontproperties=fp,
+        )
+        ax.add_artist(bar)
     if savefig:
         if path is None:
             path = f"./{get_run_id()}_image.png"
         path = Path(path)
         if not path.parent.exists():
             path.parent.mkdir(parents=True)
-        plt.savefig(
+        fig.savefig(
             path, dpi=dpi, bbox_inches=bbox_inches, pad_inches=pad_inches, transparent=transparent
         )
         if verbose:
             print(f"Saving to [png]: {path}")
         if close:
-            plt.close()
+            plt.close(fig)
     if show:
         plt.show()
     return img
@@ -221,6 +287,9 @@ def _plot_data(
 @alias_kw("colormap", "cmap")
 @alias_kw("colorbar", "cbar")
 @alias_kw("colorbar_label", "cbar_label")
+@alias_kw("colorbar_ax", "cbar_ax")
+@alias_kw("colorbar_pad", "cbar_pad")
+@alias_kw("colorbar_loc", "cbar_loc")
 def plot_image(
     data: Any,
     batch_idx: int | None = None,
@@ -228,8 +297,21 @@ def plot_image(
     colormap: None = None,
     colorbar: bool = False,
     colorbar_label: str | None = None,
+    colorbar_ax: Axes | None = None,
+    colorbar_pad: float | None = None,
+    colorbar_loc: Literal["left", "right"] | None = None,
     xlabel: str | None = None,
     ylabel: str | None = None,
+    scalebar: bool = False,
+    scalebar_label: str | None = None,
+    scalebar_fontsize: float | None = None,
+    scalebar_r: float = 0.25,
+    scalebar_h: float = 0.075,
+    scalebar_pad: float = 0.3,
+    scalebar_loc: Literal[
+        "upper left", "upper right", "lower left", "lower right", "center"
+    ] = "lower right",
+    scalebar_color: str = "black",
     savefig: bool = False,
     path: str | Path | None = None,
     show: bool = False,
@@ -243,12 +325,25 @@ def plot_image(
         data: Array(s) of a map (or maps).
         batch_idx: If not `None`, data is a single or multiple batches of images.
         info: Supplementary information about the data.
+        ax: Optional matplotlib Axes to draw into. If `None`, a new figure/axes is created.
         extent: Extent of the map in physical units.
         colormap: Name of the colormap to use for plotting.
         colorbar: If `True`, include the colorbar in the plot.
         colorbar_label: Label of the colorbar (if enabled).
+        colorbar_ax: Optional matplotlib Axes to draw the colorbar into.
+          If `None`, defaults to `ax`.
+        colorbar_pad: Colorbar padding.
+        colorbar_loc: Colorbar location.
         xlabel: Label of the x-axis.
         ylabel: Label of the y-axis.
+        scalebar: Use the a scalebar (usually makes x/yticks unnecessary).
+        scalebar_label: Scale bar label; if `None`, physical extent unit is used.
+        scalebar_fontsize: Font size of the scalebar label.
+        scalebar_r: Scale bar length fraction of the image data.
+        scalebar_h: Scale bar vertical size (in units of transform coordinate system).
+        scalebar_pad: Padding around the label and size bar (in fraction of the font size).
+        scalebar_loc: Location of the size bar.
+        scalebar_color: Color of the scale bar.
         savefig: If `True`, save the plot to file.
         path: Filename or filepath where the figure is saved.
         show: If `True`, show the plot.
@@ -263,15 +358,32 @@ def plot_image(
 @alias_kw("colormap", "cmap")
 @alias_kw("colorbar", "cbar")
 @alias_kw("colorbar_label", "cbar_label")
+@alias_kw("colorbar_ax", "cbar_ax")
+@alias_kw("colorbar_pad", "cbar_pad")
+@alias_kw("colorbar_loc", "cbar_loc")
 def plot_image_tensor(
     data: torch.Tensor,
     batch_idx: int | Sequence[int] | None = None,
+    ax: Axes | None = None,
     extent: Sequence[float] | None = None,
     colormap: Colormap | None = None,
     colorbar: bool = False,
     colorbar_label: str | None = None,
+    colorbar_ax: Axes | None = None,
+    colorbar_pad: float | None = None,
+    colorbar_loc: Literal["left", "right"] | None = None,
     xlabel: str | None = None,
     ylabel: str | None = None,
+    scalebar: bool = False,
+    scalebar_label: str | None = None,
+    scalebar_fontsize: float | None = None,
+    scalebar_r: float = 0.25,
+    scalebar_h: float = 0.075,
+    scalebar_pad: float = 0.3,
+    scalebar_loc: Literal[
+        "upper left", "upper right", "lower left", "lower right", "center"
+    ] = "lower right",
+    scalebar_color: str = "black",
     savefig: bool = False,
     path: str | Path | None = None,
     show: bool = False,
@@ -285,12 +397,25 @@ def plot_image_tensor(
         data: Array(s) of a map (or maps)
         batch_idx: If not `None`, data is a single or multiple batches of images.
         info: Supplementary information about the data.
+        ax: Optional matplotlib Axes to draw into. If `None`, a new figure/axes is created.
         extent: Extent of the map in physical units.
         colormap: Name of the colormap to use for plotting.
         colorbar: If `True`, include the colorbar in the plot.
         colorbar_label: Label of the colorbar (if enabled).
+        colorbar_ax: Optional matplotlib Axes to draw the colorbar into.
+          If `None`, defaults to `ax`.
+        colorbar_pad: Colorbar padding.
+        colorbar_loc: Colorbar location.
         xlabel: Label of the x-axis.
         ylabel: Label of the y-axis.
+        scalebar: Use the a scalebar (usually makes x/yticks unnecessary).
+        scalebar_label: Scale bar label; if `None`, physical extent unit is used.
+        scalebar_fontsize: Font size of the scalebar label.
+        scalebar_r: Scale bar length fraction of the image data.
+        scalebar_h: Scale bar vertical size (in units of transform coordinate system).
+        scalebar_pad: Padding around the label and size bar (in fraction of the font size).
+        scalebar_loc: Location of the size bar.
+        scalebar_color: Color of the scale bar.
         savefig: If `True`, save the plot to file.
         path: Filename or filepath where the figure is saved.
         show: If `True`, show the plot.
@@ -303,12 +428,24 @@ def plot_image_tensor(
     _plot_data(
         data,
         metadata,
+        ax=ax,
         extent=extent,
         colormap=colormap,
         colorbar=colorbar,
         colorbar_label=colorbar_label,
+        colorbar_ax=colorbar_ax,
+        colorbar_pad=colorbar_pad,
+        colorbar_loc=colorbar_loc,
         xlabel=xlabel,
         ylabel=ylabel,
+        scalebar=scalebar,
+        scalebar_label=scalebar_label,
+        scalebar_fontsize=scalebar_fontsize,
+        scalebar_r=scalebar_r,
+        scalebar_h=scalebar_h,
+        scalebar_pad=scalebar_pad,
+        scalebar_loc=scalebar_loc,
+        scalebar_color=scalebar_color,
         savefig=savefig,
         path=path,
         show=show,
@@ -322,15 +459,32 @@ def plot_image_tensor(
 @alias_kw("colormap", "cmap")
 @alias_kw("colorbar", "cbar")
 @alias_kw("cbar_label", "colorbar_label")
+@alias_kw("colorbar_ax", "cbar_ax")
+@alias_kw("colorbar_pad", "cbar_pad")
+@alias_kw("colorbar_loc", "cbar_loc")
 def plot_image_array(
     data: np.ndarray,
     batch_idx: int | Sequence[int] | None = None,
+    ax: Axes | None = None,
     extent: Sequence[float] | None = None,
     colormap: Colormap | None = None,
     colorbar: bool = False,
     colorbar_label: str | None = None,
+    colorbar_ax: Axes | None = None,
+    colorbar_pad: float | None = None,
+    colorbar_loc: Literal["left", "right"] | None = None,
     xlabel: str | None = None,
     ylabel: str | None = None,
+    scalebar: bool = False,
+    scalebar_label: str | None = None,
+    scalebar_fontsize: float | None = None,
+    scalebar_r: float = 0.25,
+    scalebar_h: float = 0.075,
+    scalebar_pad: float = 0.3,
+    scalebar_loc: Literal[
+        "upper left", "upper right", "lower left", "lower right", "center"
+    ] = "lower right",
+    scalebar_color: str = "black",
     savefig: bool = False,
     path: str | Path | None = None,
     show: bool = False,
@@ -344,12 +498,25 @@ def plot_image_array(
         data: Array(s) of a map (or maps)
         batch_idx: If not `None`, data is a single or multiple batches of images.
         info: Supplementary information about the data.
+        ax: Optional matplotlib Axes to draw into. If `None`, a new figure/axes is created.
         extent: Extent of the map in physical units.
         colormap: Name of the colormap to use for plotting.
         colorbar: If `True`, include the colorbar in the plot.
         colorbar_label: Label of the colorbar (if enabled).
+        colorbar_ax: Optional matplotlib Axes to draw the colorbar into.
+          If `None`, defaults to `ax`.
+        colorbar_pad: Colorbar padding.
+        colorbar_loc: Colorbar location.
         xlabel: Label of the x-axis.
         ylabel: Label of the y-axis.
+        scalebar: Use the a scalebar (usually makes x/yticks unnecessary).
+        scalebar_label: Scale bar label; if `None`, physical extent unit is used.
+        scalebar_fontsize: Font size of the scalebar label.
+        scalebar_r: Scale bar length fraction of the image data.
+        scalebar_h: Scale bar vertical size (in units of transform coordinate system).
+        scalebar_pad: Padding around the label and size bar (in fraction of the font size).
+        scalebar_loc: Location of the size bar.
+        scalebar_color: Color of the scale bar.
         savefig: If `True`, save the plot to file.
         path: Filename or filepath where the figure is saved.
         show: If `True`, show the plot.
@@ -362,12 +529,24 @@ def plot_image_array(
     _plot_data(
         data,
         metadata,
+        ax=ax,
         extent=extent,
         colormap=colormap,
         colorbar=colorbar,
         colorbar_label=colorbar_label,
+        colorbar_ax=colorbar_ax,
+        colorbar_pad=colorbar_pad,
+        colorbar_loc=colorbar_loc,
         xlabel=xlabel,
         ylabel=ylabel,
+        scalebar=scalebar,
+        scalebar_label=scalebar_label,
+        scalebar_fontsize=scalebar_fontsize,
+        scalebar_r=scalebar_r,
+        scalebar_h=scalebar_h,
+        scalebar_pad=scalebar_pad,
+        scalebar_loc=scalebar_loc,
+        scalebar_color=scalebar_color,
         savefig=savefig,
         path=path,
         show=show,
@@ -381,15 +560,32 @@ def plot_image_array(
 @alias_kw("colormap", "cmap")
 @alias_kw("colorbar", "cbar")
 @alias_kw("cbar_label", "colorbar_label")
+@alias_kw("colorbar_ax", "cbar_ax")
+@alias_kw("colorbar_pad", "cbar_pad")
+@alias_kw("colorbar_loc", "cbar_loc")
 def plot_image_quantity(
     data: au.Quantity,
     batch_idx: int | Sequence[int] | None = None,
+    ax: Axes | None = None,
     extent: Sequence[float] | None = None,
     colormap: Colormap | None = None,
     colorbar: bool = False,
     colorbar_label: str | None = None,
+    colorbar_ax: Axes | None = None,
+    colorbar_pad: float | None = None,
+    colorbar_loc: Literal["left", "right"] | None = None,
     xlabel: str | None = None,
     ylabel: str | None = None,
+    scalebar: bool = False,
+    scalebar_label: str | None = None,
+    scalebar_fontsize: float | None = None,
+    scalebar_r: float = 0.25,
+    scalebar_h: float = 0.075,
+    scalebar_pad: float = 0.3,
+    scalebar_loc: Literal[
+        "upper left", "upper right", "lower left", "lower right", "center"
+    ] = "lower right",
+    scalebar_color: str = "black",
     savefig: bool = False,
     path: str | Path | None = None,
     show: bool = False,
@@ -403,12 +599,25 @@ def plot_image_quantity(
         data: Array(s) of a map (or maps)
         batch_idx: If not `None`, data is a single or multiple batches of images.
         info: Supplementary information about the data.
+        ax: Optional matplotlib Axes to draw into. If `None`, a new figure/axes is created.
         extent: Extent of the map in physical units.
         colormap: Name of the colormap to use for plotting.
         colorbar: If `True`, include the colorbar in the plot.
         colorbar_label: Label of the colorbar (if enabled).
+        colorbar_ax: Optional matplotlib Axes to draw the colorbar into.
+          If `None`, defaults to `ax`.
+        colorbar_pad: Colorbar padding.
+        colorbar_loc: Colorbar location.
         xlabel: Label of the x-axis.
         ylabel: Label of the y-axis.
+        scalebar: Use the a scalebar (usually makes x/yticks unnecessary).
+        scalebar_label: Scale bar label; if `None`, physical extent unit is used.
+        scalebar_fontsize: Font size of the scalebar label.
+        scalebar_r: Scale bar length fraction of the image data.
+        scalebar_h: Scale bar vertical size (in units of transform coordinate system).
+        scalebar_pad: Padding around the label and size bar (in fraction of the font size).
+        scalebar_loc: Location of the size bar.
+        scalebar_color: Color of the scale bar.
         savefig: If `True`, save the plot to file.
         path: Filename or filepath where the figure is saved.
         show: If `True`, show the plot.
@@ -424,12 +633,24 @@ def plot_image_quantity(
     _plot_data(
         data,
         metadata,
+        ax=ax,
         extent=extent,
         colormap=colormap,
         colorbar=colorbar,
         colorbar_label=colorbar_label,
+        colorbar_ax=colorbar_ax,
+        colorbar_pad=colorbar_pad,
+        colorbar_loc=colorbar_loc,
         xlabel=xlabel,
         ylabel=ylabel,
+        scalebar=scalebar,
+        scalebar_label=scalebar_label,
+        scalebar_fontsize=scalebar_fontsize,
+        scalebar_r=scalebar_r,
+        scalebar_h=scalebar_h,
+        scalebar_pad=scalebar_pad,
+        scalebar_loc=scalebar_loc,
+        scalebar_color=scalebar_color,
         savefig=savefig,
         path=path,
         show=show,
@@ -443,15 +664,32 @@ def plot_image_quantity(
 @alias_kw("colormap", "cmap")
 @alias_kw("colorbar", "cbar")
 @alias_kw("cbar_label", "colorbar_label")
+@alias_kw("colorbar_ax", "cbar_ax")
+@alias_kw("colorbar_pad", "cbar_pad")
+@alias_kw("colorbar_loc", "cbar_loc")
 def plot_image_from_batch(
     data: Sequence[torch.Tensor | np.ndarray | dict],
     batch_idx: int | Sequence[int] | None = None,
+    ax: Axes | None = None,
     extent: Sequence[float] | None = None,
     colormap: None = None,
     colorbar: bool = False,
     colorbar_label: str | None = None,
+    colorbar_ax: Axes | None = None,
+    colorbar_pad: float | None = None,
+    colorbar_loc: Literal["left", "right"] | None = None,
     xlabel: str | None = None,
     ylabel: str | None = None,
+    scalebar: bool = False,
+    scalebar_label: str | None = None,
+    scalebar_fontsize: float | None = None,
+    scalebar_r: float = 0.25,
+    scalebar_h: float = 0.075,
+    scalebar_pad: float = 0.3,
+    scalebar_loc: Literal[
+        "upper left", "upper right", "lower left", "lower right", "center"
+    ] = "lower right",
+    scalebar_color: str = "black",
     savefig: bool = False,
     path: str | Path | None = None,
     show: bool = False,
@@ -465,12 +703,25 @@ def plot_image_from_batch(
         data: Array(s) of a map (or maps)
         batch_idx: If not `None`, data is a single or multiple batches of images.
         info: Supplementary information about the data.
+        ax: Optional matplotlib Axes to draw into. If `None`, a new figure/axes is created.
         extent: Extent of the map in physical units.
         colormap: Name of the colormap to use for plotting.
         colorbar: If `True`, include the colorbar in the plot.
         colorbar_label: Label of the colorbar (if enabled).
+        colorbar_ax: Optional matplotlib Axes to draw the colorbar into.
+          If `None`, defaults to `ax`.
+        colorbar_pad: Colorbar padding.
+        colorbar_loc: Colorbar location.
         xlabel: Label of the x-axis.
         ylabel: Label of the y-axis.
+        scalebar: Use the a scalebar (usually makes x/yticks unnecessary).
+        scalebar_label: Scale bar label; if `None`, physical extent unit is used.
+        scalebar_fontsize: Font size of the scalebar label.
+        scalebar_r: Scale bar length fraction of the image data.
+        scalebar_h: Scale bar vertical size (in units of transform coordinate system).
+        scalebar_pad: Padding around the label and size bar (in fraction of the font size).
+        scalebar_loc: Location of the size bar.
+        scalebar_color: Color of the scale bar.
         savefig: If `True`, save the plot to file.
         path: Filename or filepath where the figure is saved.
         show: If `True`, show the plot.
@@ -488,12 +739,24 @@ def plot_image_from_batch(
     _plot_data(
         data,
         metadata,
+        ax=ax,
         extent=extent,
         colormap=colormap,
         colorbar=colorbar,
         colorbar_label=colorbar_label,
+        colorbar_ax=colorbar_ax,
+        colorbar_pad=colorbar_pad,
+        colorbar_loc=colorbar_loc,
         xlabel=xlabel,
         ylabel=ylabel,
+        scalebar=scalebar,
+        scalebar_label=scalebar_label,
+        scalebar_fontsize=scalebar_fontsize,
+        scalebar_r=scalebar_r,
+        scalebar_h=scalebar_h,
+        scalebar_pad=scalebar_pad,
+        scalebar_loc=scalebar_loc,
+        scalebar_color=scalebar_color,
         savefig=savefig,
         path=path,
         show=show,
