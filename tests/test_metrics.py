@@ -7,6 +7,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from skais_mapper._compat import TORCH_AVAILABLE
 import pytest
+import numpy as np
 import matplotlib.pyplot as plt
 
 if TORCH_AVAILABLE or TYPE_CHECKING:
@@ -193,26 +194,36 @@ def test_CenterOffsetError_half_mass_radius(gaussians, show_plots):
 
 @pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch not installed")
 def test_CenterOffsetError_update(gaussians, show_plots):
-    """Test `CenterOffsetError.half_mass_radius`."""
+    """Test `CenterOffsetError.update`."""
     gaussians = gaussians
     coe = metrics.CenterOffsetError()
     coe.update(gaussians[0:3], gaussians[3:6])
-    assert coe.min_aggregate >= 0
-    assert coe.max_aggregate > 0
-    assert coe.n_observations == 3
-    assert coe.aggregate > 0
+    coe.update(gaussians[0:3], gaussians[3:6])
+    assert coe.n_observations == 3*2
+    assert len(coe.aggregate) > 0
 
 
 @pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch not installed")
 def test_CenterOffsetError_compute(gaussians, show_plots):
-    """Test `CenterOffsetError.half_mass_radius`."""
+    """Test `CenterOffsetError.compute`."""
     gaussians = gaussians
     coe = metrics.CenterOffsetError()
     coe.update(gaussians[0:3], gaussians[3:6])
     val = coe.compute()
     assert val > 0
-    assert val < coe.max_aggregate
-    assert coe.min_aggregate < val
+
+
+@pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch not installed")
+def test_CenterOffsetError_dump(gaussians, show_plots):
+    """Test `CenterOffsetError.dump`."""
+    gaussians = gaussians
+    coe = metrics.CenterOffsetError()
+    coe.update(gaussians[0:3], gaussians[3:6])
+    coe.update(gaussians[0:3], gaussians[3:6])
+    arrs = coe.dump()
+    assert isinstance(arrs, dict)
+    assert isinstance(arrs["aggregate"], np.ndarray)
+    assert isinstance(arrs["aggregate"], np.ndarray)
 
 
 @pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch not installed")
@@ -234,7 +245,7 @@ def test_RadialProfileCurveError_update(gaussians):
 
 
 @pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch not installed")
-def test_RadialProfileCurveError_compute(gaussians, show_plots):
+def test_RadialProfileCurveError_compute(gaussians):
     """Test `RadialProfileCurveError.compute`."""
     gaussians = gaussians * 1e12
     gaussians_noise = gaussians + torch.rand(*gaussians.shape) * 1e12
@@ -244,6 +255,19 @@ def test_RadialProfileCurveError_compute(gaussians, show_plots):
     val = rpce.compute()
     assert rpce.n_observations == gaussians.shape[0] * 2
     assert val > 0
+
+
+@pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch not installed")
+def test_RadialProfileCurveError_dump(gaussians):
+    """Test `RadialProfileCurveError.dump`."""
+    gaussians = gaussians * 1e12
+    gaussians_noise = gaussians + torch.rand(*gaussians.shape) * 1e12
+    rpce = metrics.RadialProfileCurveError(nbins=50)
+    rpce.update(gaussians_noise, gaussians)
+    rpce.update(gaussians_noise, gaussians)
+    out = rpce.dump()
+    assert isinstance(out, dict)
+    assert isinstance(out["aggregate"], np.ndarray)
 
 
 @pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch not installed")
@@ -288,9 +312,37 @@ def test_MapTotalError_update(gaussians):
     gaussians_noise = gaussians * rel_noise
     mte = metrics.MapTotalError(relative=False)
     mte.update(gaussians_noise, gaussians)
+    mte.update(gaussians_noise, gaussians)
+    assert mte.n_observations == gaussians.shape[0] * 2
+    assert len(mte.aggregate) > 0
+
+
+@pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch not installed")
+def test_MapTotalError_compute(gaussians):
+    """Test `MapTotalError.compute`."""
+    gaussians = gaussians * 1e12
+    rel_noise = torch.rand(*gaussians.shape)
+    gaussians_noise = gaussians * rel_noise
+    mte = metrics.MapTotalError(relative=False)
+    mte.update(gaussians_noise, gaussians)
+    val = mte.compute()
     assert mte.n_observations == gaussians.shape[0]
-    assert mte.max_aggregate > mte.min_aggregate
-    assert mte.aggregate > 0
+    assert val > 0
+
+
+@pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch not installed")
+def test_MapTotalError_dump(gaussians):
+    """Test `MapTotalError.dump`."""
+    gaussians = gaussians * 1e12
+    rel_noise = torch.rand(*gaussians.shape)
+    gaussians_noise = gaussians * rel_noise
+    mte = metrics.MapTotalError(relative=False)
+    mte.update(gaussians_noise, gaussians)
+    out = mte.dump()
+    assert isinstance(out, dict)
+    assert isinstance(out["aggregate"], np.ndarray)
+    assert isinstance(out["target_total"], np.ndarray)
+    assert isinstance(out["pred_total"], np.ndarray)
 
 
 @pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch not installed")
@@ -335,8 +387,8 @@ def test_AsymmetryError_update(show_plots):
 
 
 @pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch not installed")
-def test_AsymmetryError_compute(show_plots):
-    """Test `MapTotalError.update`."""
+def test_AsymmetryError_compute():
+    """Test `MapTotalError.compute`."""
     maps = torch.cat([
         build_triangle_test_tensor(512, 512, invert_center=True) for _ in range(6)
     ], dim=0)
@@ -346,6 +398,22 @@ def test_AsymmetryError_compute(show_plots):
     ae.update(maps_noise, maps)
     val = ae.compute()
     assert val > 0
+
+
+@pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch not installed")
+def test_AsymmetryError_dump():
+    """Test `MapTotalError.dump`."""
+    maps = torch.cat([
+        build_triangle_test_tensor(512, 512, invert_center=True) for _ in range(6)
+    ], dim=0)
+    rel_noise = torch.rand(*maps.shape)
+    maps_noise = maps * rel_noise
+    ae = metrics.AsymmetryError(r_factor=1.5, reduction=torch.sum)
+    ae.update(maps_noise, maps)
+    out = ae.dump()
+    assert isinstance(out, dict)
+    assert isinstance(out["aggregate"], np.ndarray)
+    assert isinstance(out["target_aggregate"], np.ndarray)
 
 
 @pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch not installed")
@@ -408,6 +476,25 @@ def test_ClumpinessError_compute(show_plots):
 
 
 @pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch not installed")
+def test_ClumpinessError_dump(show_plots):
+    """Test `ClumpinessError.dump`."""
+    maps = torch.cat([
+        build_triangle_test_tensor(512, 512, invert_center=True) for _ in range(6)
+    ], dim=0)
+    maps = maps * 1e12
+    rel_noise = torch.rand(*maps.shape)
+    maps_noise = maps * rel_noise
+    ce = metrics.ClumpinessError(
+        sigma_mode="pixels", sigma_pixels=10, reduction=torch.sum
+    )
+    ce.update(maps_noise, maps)
+    out = ce.dump()
+    assert isinstance(out, dict)
+    assert isinstance(out["aggregate"], np.ndarray)
+    assert isinstance(out["target_aggregate"], np.ndarray)
+
+
+@pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch not installed")
 def test_PowerSpectrumError_update(gaussians, show_plots):
     """Test `PowerSpectrumError.update`."""
     gaussians = gaussians * 1e12
@@ -433,3 +520,16 @@ def test_PowerSpectrumError_compute(gaussians, show_plots):
     pse.update(gaussians_noise, gaussians)
     val = pse.compute()
     assert val > 0
+
+
+@pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch not installed")
+def test_PowerSpectrumError_dump(gaussians, show_plots):
+    """Test `PowerSpectrumError.dump`."""
+    gaussians = gaussians * 1e12
+    rel_noise = torch.rand(*gaussians.shape)
+    gaussians_noise = gaussians * rel_noise
+    pse = metrics.PowerSpectrumError(nbins=64, log_power=True)
+    pse.update(gaussians_noise, gaussians)
+    out = pse.dump()
+    assert isinstance(out, dict)
+    assert isinstance(out["aggregate"], np.ndarray)
