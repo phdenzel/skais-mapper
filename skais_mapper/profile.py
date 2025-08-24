@@ -4,6 +4,7 @@
 """Profile routines for 2D tensor maps and images."""
 
 from __future__ import annotations
+import numpy as np
 from skais_mapper._compat import TORCH_AVAILABLE
 from typing import Literal, Callable, TYPE_CHECKING
 
@@ -123,8 +124,10 @@ def radial_histogram(
     r: torch.Tensor | None = None,
     bin_edges: torch.Tensor | None = None,
     nbins: int = 100,
+    log_bins: bool = False,
     center_mode: Literal["centroid", "image_center", "fixed"] = "image_center",
     average: bool = False,
+    eps: float = 1e-6,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Compute 1D histograms of 2D maps over radial bins.
 
@@ -133,8 +136,10 @@ def radial_histogram(
         r: Radius values of shape ([B,] H, W).
         bin_edges: Edges of the bins of shape (K+1,).
         nbins: Number of bins (K) to use if `bin_edges` is not provided.
+        log_bins: Use logarithmic binning.
         center_mode: Computation mode; one of ["centroid", "image_center", "fixed"].
         average: Whether to average the histogram by pixel count.
+        eps: Numerical stability constant.
 
     Returns:
         hist: (B, K) with sum over pixels in each bin.
@@ -156,9 +161,23 @@ def radial_histogram(
     if not nbins:
         raise ValueError("Number of bins must be greater than 0.")
     elif bin_edges is None:
-        bin_edges = torch.linspace(0, r.max(), nbins + 1, device=maps.device, dtype=maps.dtype)
+        if log_bins:
+            bin_edges = torch.logspace(
+                torch.log10(r.min().clamp_min(eps)),
+                torch.log10(r.max()),
+                steps=nbins + 1,
+                base=10.0,
+                device=maps.device,
+                dtype=maps.dtype,
+            )
+        else:
+            bin_edges = torch.linspace(
+                0, r.max(), nbins + 1, device=maps.device, dtype=maps.dtype
+            )
     else:
         nbins = bin_edges.numel() - 1
+    if log_bins:
+        r = torch.log10(r.clamp_min(eps))
     m_flat = maps.reshape(B, -1)
     c_flat = torch.ones_like(m_flat, device=maps.device, dtype=maps.dtype)
     r_flat = r.reshape(B, -1)
@@ -178,6 +197,7 @@ def cumulative_radial_histogram(
     r: torch.Tensor | None = None,
     bin_edges: torch.Tensor | None = None,
     nbins: int = 100,
+    log_bins: bool = False,
     center_mode: Literal["centroid", "image_center", "fixed"] = "image_center",
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Compute cumulative 1D histograms of 2D maps over radial bins.
@@ -187,6 +207,7 @@ def cumulative_radial_histogram(
         r: Radius values of shape ([B,] H, W).
         bin_edges: Edges of the bins of shape (K+1,).
         nbins: Number of bins (K) to use if `bin_edges` is not provided.
+        log_bins: Use logarithmic binning.
         center_mode: Computation mode; one of ["centroid", "image_center", "fixed"].
 
     Returns:
@@ -200,6 +221,7 @@ def cumulative_radial_histogram(
         bin_edges=bin_edges,
         nbins=nbins,
         center_mode=center_mode,
+        log_bins=log_bins,
         average=False,
     )
     hist = torch.cumsum(hist, dim=1)
@@ -212,6 +234,7 @@ def radial_pdf(
     r: torch.Tensor | None = None,
     bin_edges: torch.Tensor | None = None,
     nbins: int = 100,
+    log_bins: bool = False,
     center_mode: Literal["centroid", "image_center", "fixed"] = "image_center",
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Compute radial probability density function (PDF) of 2D maps.
@@ -225,6 +248,7 @@ def radial_pdf(
         r: Radius values of shape ([B,] H, W).
         bin_edges: Edges of the bins of shape (K+1,).
         nbins: Number of bins (K) to use if `bin_edges` is not provided.
+        log_bins: Use logarithmic binning.
         center_mode: Computation mode; one of ["centroid", "image_center", "fixed"].
 
     Returns:
@@ -237,6 +261,7 @@ def radial_pdf(
         bin_edges=bin_edges,
         nbins=nbins,
         center_mode=center_mode,
+        log_bins=log_bins,
         average=True,
     )
     total_mass = mass_per_bin.sum(dim=1, keepdim=True).clamp_min(1e-12)
@@ -251,6 +276,7 @@ def radial_cdf(
     r: torch.Tensor | None = None,
     bin_edges: torch.Tensor | None = None,
     nbins: int = 100,
+    log_bins: bool = False,
     center_mode: Literal["centroid", "image_center", "fixed"] = "image_center",
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Compute radial cumulative density function (CDF) of 2D maps.
@@ -263,6 +289,7 @@ def radial_cdf(
         r: Radius values of shape ([B,] H, W).
         bin_edges: Edges of the bins of shape (K+1,).
         nbins: Number of bins (K) to use if `bin_edges` is not provided.
+        log_bins: Use logarithmic binning.
         center_mode: Computation mode; one of ["centroid", "image_center", "fixed"].
 
     Returns:
@@ -274,6 +301,7 @@ def radial_cdf(
         r=r,
         bin_edges=bin_edges,
         nbins=nbins,
+        log_bins=log_bins,
         center_mode=center_mode,
     )
     dr = edges[:, 1:] - edges[:, :-1]
@@ -288,6 +316,7 @@ class RadialProfile:
         self,
         nbins: int = 100,
         center_mode: Literal["centroid", "image_center", "fixed"] = "image_center",
+        log_bins: bool = False,
         cumulative: bool = False,
         eps: float = 1e-12,
         device: torch.device | None = None,
@@ -307,6 +336,7 @@ class RadialProfile:
         self.device = torch.get_default_device() if device is None else device
         self.nbins = int(max(1, nbins))
         self.center_mode = center_mode
+        self.log_bins = log_bins
         self.cumulative = bool(cumulative)
         self.eps = float(eps)
         self.target_aggregate = None
@@ -346,17 +376,25 @@ class RadialProfile:
         B, H, W = pred_.shape
         # Compute radial PDFs for both maps using identical binning.
         if self.cumulative:
-            prf_p, edges = radial_cdf(pred_, nbins=self.nbins, center_mode=self.center_mode)
-            prf_t, _ = radial_cdf(targ_, bin_edges=edges[0], center_mode=self.center_mode)
+            prf_p, edges = radial_cdf(
+                pred_, nbins=self.nbins, log_bins=self.log_bins, center_mode=self.center_mode
+            )
+            prf_t, _ = radial_cdf(
+                targ_, bin_edges=edges[0], log_bins=self.log_bins, center_mode=self.center_mode
+            )
         else:
-            prf_p, edges = radial_pdf(pred_, nbins=self.nbins, center_mode=self.center_mode)
-            prf_t, _ = radial_pdf(targ_, bin_edges=edges[0], center_mode=self.center_mode)
+            prf_p, edges = radial_pdf(
+                pred_, nbins=self.nbins, log_bins=self.log_bins, center_mode=self.center_mode
+            )
+            prf_t, _ = radial_pdf(
+                targ_, bin_edges=edges[0], log_bins=self.log_bins, center_mode=self.center_mode
+            )
         if self.edges is None:
             self.edges = edges[0]
         if self.target_aggregate is None:
             self.target_aggregate = prf_t
         else:
-            self.target_aggregrate = torch.cat((self.target_aggregate, prf_t), dim=0)
+            self.target_aggregate = torch.cat((self.target_aggregate, prf_t), dim=0)
         if self.aggregate is None:
             self.aggregate = prf_p
         else:
@@ -368,3 +406,10 @@ class RadialProfile:
         if reduction is None:
             reduction = self.reduction
         return reduction(self.aggregate, dim=0), reduction(self.target_aggregate, dim=0)
+
+    def dump(self) -> dict[str, np.ndarray]:
+        """Dump non-reduced metric and aggregate data as numpy array."""
+        raw = self.aggregate.detach().clone().cpu().numpy()
+        targ = self.target_aggregate.detach().clone().cpu().numpy()
+        edges = self.edges.detach().clone().cpu().numpy()
+        return {"aggregate": raw, "target_aggregate": targ, "edges": edges}
