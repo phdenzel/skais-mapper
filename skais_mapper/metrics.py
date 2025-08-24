@@ -4,6 +4,7 @@
 """Physical metrics for tensor maps and images."""
 
 from __future__ import annotations
+import numpy as np
 from skais_mapper.profile import (
     _sanitize_ndim,
     _make_grid,
@@ -105,9 +106,7 @@ class CenterOffsetError:
         self.pixel_size = float(pixel_size)
         self.eps = float(eps)
         self.n_observations = torch.tensor(n_observations, device=self.device)
-        self.aggregate = torch.zeros(1, device=self.device)
-        self.max_aggregate = -torch.inf * torch.ones(1, device=self.device)
-        self.min_aggregate = torch.inf * torch.ones(1, device=self.device)
+        self.aggregate = None
 
     def to(self, device: torch.device):
         """Perform tensor device conversion for all internal tensors.
@@ -117,17 +116,15 @@ class CenterOffsetError:
         """
         self.device = device
         self.n_observations = self.n_observations.to(device=self.device)
-        self.aggregate = self.aggregate.to(device=self.device)
-        self.max_aggregate = self.max_aggregate.to(device=self.device)
-        self.min_aggregate = self.min_aggregate.to(device=self.device)
+        self.aggregate = (
+            self.aggregate.to(device=self.device) if self.aggregate is not None else None
+        )
 
     def reset(self, n_observations: int = 0, device: torch.device | None = None) -> None:
         """Reset internal metrics state."""
         self.device = device if device is not None else self.device
         self.n_observations = torch.tensor(n_observations, device=self.device)
-        self.aggregate = torch.zeros(self.nbins, device=self.device)
-        self.max_aggregate = -torch.inf * torch.ones(self.nbins, device=self.device)
-        self.min_aggregate = torch.inf * torch.ones(self.nbins, device=self.device)
+        self.aggregate = None
 
     @staticmethod
     def _com_xy(
@@ -191,22 +188,22 @@ class CenterOffsetError:
         else:
             centers_t = self._peak_xy(targ_)
             centers_p = self._peak_xy(pred_)
-        delta2 = (centers_p - centers_t) ** 2
-        dist = torch.sqrt(delta2.sum(dim=1)) * self.pixel_size
+        delta = (centers_p - centers_t) * self.pixel_size
         if self.normalize == "image_radius":
-            denom = (
-                0.5
-                * torch.sqrt(torch.tensor(H**2 + W**2, dtype=dist.dtype, device=dist.device))
-                * self.pixel_size
+            denom = self.pixel_size * torch.tensor(
+                [H/2., W/2.], dtype=delta.dtype, device=delta.device
             )
         elif self.normalize == "r50":
-            denom = self._half_mass_radius(targ_) * self.pixel_size
+            denom = self._half_mass_radius(targ_) * self.pixel_size * torch.ones(
+                2, dtype=delta.dtype, device=delta.device
+            )
         else:
-            denom = 1
-        dist = dist / denom.clamp_min(self.eps)
-        self.aggregate += dist.sum(dim=0)
-        self.min_aggregate = torch.min(self.min_aggregate, dist.amin())
-        self.max_aggregate = torch.max(self.max_aggregate, dist.amax())
+            denom = torch.one(2, dtype=delta.dtype, device=delta.device)
+        delta = delta / denom.view(1, 2).clamp_min(self.eps)
+        if self.aggregate is None:
+            self.aggregate = delta
+        else:
+            self.aggregate = torch.cat([self.aggregate, delta])
         self.n_observations += B
 
     @torch.no_grad()
@@ -214,9 +211,16 @@ class CenterOffsetError:
         """Return the center offset error over all seen samples."""
         if self.n_observations == 0:
             return self.aggregate
+        dist = self.aggregate.pow(2).sum(dim=1).sqrt()
         if reduction is None:
             reduction = self.reduction
-        return reduction(self.aggregate / float(self.n_observations))
+        return reduction(dist)
+
+    def dump(self) -> dict[str, np.ndarray]:
+        """Dump non-reduced metric and aggregate data as numpy array."""
+        raw = self.aggregate.detach().clone().cpu().numpy()
+        dists = self.compute(reduction=torch.nn.Identity()).detach().cpu().numpy()
+        return {"dists": dists, "aggregate": raw}
 
 
 class RadialProfileCurveError:
@@ -234,6 +238,7 @@ class RadialProfileCurveError:
         self,
         nbins: int = 100,
         center_mode: Literal["centroid", "image_center", "fixed"] = "image_center",
+        log_bins: bool = False,
         cumulative: bool = False,
         eps: float = 1e-12,
         n_observations: int = 0,
@@ -246,6 +251,7 @@ class RadialProfileCurveError:
             nbins: Number of radial bins.
             center_mode: Centering mode for radial profiles; one of
               `["centroid", "image_center", "fixed"]`.
+            log_bins: Use logarithmic binning.
             cumulative: Whether to compare cumulative radial profiles.
             eps: Numerical stability for divisions.
             n_observations: Number of observations (bins) seen by the internal state.
@@ -256,6 +262,7 @@ class RadialProfileCurveError:
         self.device = torch.get_default_device() if device is None else device
         self.nbins = int(max(1, nbins))
         self.center_mode = center_mode
+        self.log_bins = log_bins
         self.cumulative = bool(cumulative)
         self.eps = float(eps)
         self.n_observations = torch.tensor(n_observations, device=self.device)
@@ -301,14 +308,23 @@ class RadialProfileCurveError:
         B, H, W = pred_.shape
         # Compute radial PDFs for both maps using identical binning.
         if self.cumulative:
-            pdf_p, edges = radial_cdf(pred_, nbins=self.nbins, center_mode=self.center_mode)
-            pdf_t, _ = radial_cdf(targ_, bin_edges=edges[0], center_mode=self.center_mode)
+            pdf_p, edges = radial_cdf(
+                pred_, nbins=self.nbins, log_bins=self.log_bins, center_mode=self.center_mode
+            )
+            pdf_t, _ = radial_cdf(
+                targ_, bin_edges=edges[0], log_bins=self.log_bins, center_mode=self.center_mode
+            )
         else:
-            pdf_p, edges = radial_pdf(pred_, nbins=self.nbins, center_mode=self.center_mode)
-            pdf_t, _ = radial_pdf(targ_, bin_edges=edges[0], center_mode=self.center_mode)
+            pdf_p, edges = radial_pdf(
+                pred_, nbins=self.nbins, log_bins=self.log_bins, center_mode=self.center_mode
+            )
+            pdf_t, _ = radial_pdf(
+                targ_, bin_edges=edges[0], log_bins=self.log_bins, center_mode=self.center_mode
+            )
         dr = (edges[:, 1:] - edges[:, :-1]).clamp_min(self.eps)
         diff = (pdf_p - pdf_t).abs()
         per_bin_err = diff * dr
+        self._r_edges = edges[0]
         self.n_observations += B
         self.aggregate += torch.sum(per_bin_err, dim=0)
         self.lsq_aggregate += torch.sum(per_bin_err.pow(2), dim=0)
@@ -328,7 +344,7 @@ class RadialProfileCurveError:
     @property
     def std_per_bin(self) -> torch.Tensor:
         """Error variance per bin."""
-        return self.var_per_bin.sqrt() / self.n_observations
+        return self.var_per_bin.sqrt()
 
     @torch.no_grad()
     def compute(self, reduction: Callable | None = None) -> torch.Tensor:
@@ -337,9 +353,17 @@ class RadialProfileCurveError:
             reduction = self.reduction
         return reduction(self.mean_per_bin)
 
+    def dump(self) -> dict[str, np.ndarray]:
+        """Dump non-reduced metric and aggregate data as numpy array."""
+        raw = self.aggregate.detach().clone().cpu().numpy()
+        mean = self.mean_per_bin.detach().clone().cpu().numpy()
+        std = self.std_per_bin.detach().clone().cpu().numpy()
+        edges = self._r_edges.detach().clone().cpu().numpy()
+        return {"aggregate": raw, "mean_per_bin": mean, "std_per_bin": std, "edges": edges}
+
 
 class MapTotalError:
-    """Absolute or relative error in total integrated map quantity (e.g., flux/mass)."""
+    """Absolute or relative (mean) error in total integrated map quantity (e.g., flux/mass)."""
 
     def __init__(
         self,
@@ -362,9 +386,9 @@ class MapTotalError:
         self.eps = float(eps)
         self.device = torch.get_default_device() if device is None else device
         self.n_observations = torch.tensor(n_observations, device=self.device)
-        self.aggregate = torch.zeros(1, device=self.device)
-        self.max_aggregate = -torch.inf * torch.ones(1, device=self.device)
-        self.min_aggregate = torch.inf * torch.ones(1, device=self.device)
+        self.aggregate = None
+        self.total_pred = None
+        self.total_target = None
 
     def to(self, device: torch.device):
         """Perform tensor device conversion for all internal tensors.
@@ -374,17 +398,23 @@ class MapTotalError:
         """
         self.device = device
         self.n_observations = self.n_observations.to(device=self.device)
-        self.aggregate = self.aggregate.to(device=self.device)
-        self.max_aggregate = self.max_aggregate.to(device=self.device)
-        self.min_aggregate = self.min_aggregate.to(device=self.device)
+        self.aggregate = (
+            self.aggregate.to(device=self.device) if self.aggregate is not None else None
+        )
+        self.total_pred = (
+            self.total_pred.to(device=self.device) if self.total_pred is not None else None
+        )
+        self.total_target = (
+            self.total_target.to(device=self.device) if self.total_target is not None else None
+        )
 
     def reset(self, n_observations: int = 0, device: torch.device | None = None) -> None:
         """Reset internal metrics state."""
         self.device = device if device is not None else self.device
         self.n_observations = torch.tensor(n_observations, device=self.device)
-        self.aggregate = torch.zeros(1, device=self.device)
-        self.max_aggregate = -torch.inf * torch.ones(1, device=self.device)
-        self.min_aggregate = torch.inf * torch.ones(1, device=self.device)
+        self.aggregate = None
+        self.total_pred = None
+        self.total_target = None
 
     @torch.no_grad()
     def update(self, data: torch.Tensor, prediction: torch.Tensor) -> None:
@@ -405,16 +435,32 @@ class MapTotalError:
             per_sample_err = (sum_p - sum_t).abs() / (sum_t.abs() + self.eps)
         else:
             per_sample_err = (sum_p - sum_t).abs()
-        self.aggregate += per_sample_err.sum(dim=0)
-        self.min_aggregate = torch.min(self.min_aggregate, per_sample_err.amin())
-        self.max_aggregate = torch.max(self.max_aggregate, per_sample_err.amax())
+        if self.aggregate is None:
+            self.aggregate = per_sample_err
+        else:
+            self.aggregate = torch.cat([self.aggregate, per_sample_err], dim=0)
+        if self.total_pred is None:
+            self.total_pred = sum_p
+        else:
+            self.total_pred = torch.cat([self.total_pred, sum_p], dim=0)
+        if self.total_target is None:
+            self.total_target = sum_t
+        else:
+            self.total_target = torch.cat([self.total_target, sum_t], dim=0)
         self.n_observations += B
 
     def compute(self) -> torch.Tensor:
         """Return the mean total quantity error over all seen samples."""
         if self.n_observations == 0:
             return self.aggregate
-        return self.aggregate / float(self.n_observations)
+        return self.aggregate.sum() / float(self.n_observations)
+
+    def dump(self) -> dict[str, np.ndarray]:
+        """Dump non-reduced metric as numpy array."""
+        raw = self.aggregate.detach().clone().cpu().numpy()
+        targ = self.total_target.detach().clone().cpu().numpy()
+        pred = self.total_pred.detach().clone().cpu().numpy()
+        return {"aggregate": raw, "target_total": targ, "pred_total": pred}
 
 
 class AsymmetryError:
@@ -583,6 +629,12 @@ class AsymmetryError:
             return self.aggregate
         diff = (self.aggregate - self.target_aggregate).abs()
         return reduction(diff.flatten() / float(self.n_observations))
+
+    def dump(self) -> dict[str, np.ndarray]:
+        """Dump non-reduced metric components as numpy arrays."""
+        raw = self.aggregate.detach().clone().cpu().numpy() / float(self.n_observations)
+        target = self.target_aggregate.detach().clone().cpu().numpy() / float(self.n_observations)
+        return {"aggregate": raw, "target_aggregate": target}
 
 
 class ClumpinessError:
@@ -790,6 +842,12 @@ class ClumpinessError:
             return self.aggregate
         diff = (self.aggregate - self.target_aggregate).abs()
         return reduction(diff.flatten() / float(self.n_observations))
+
+    def dump(self) -> dict[str, np.ndarray]:
+        """Dump non-reduced metric components as numpy arrays."""
+        raw = self.aggregate.detach().clone().cpu().numpy() / float(self.n_observations)
+        target = self.target_aggregate.detach().clone().cpu().numpy() / float(self.n_observations)
+        return {"aggregate": raw, "target_aggregate": target}
 
 
 class PowerSpectrumError:
@@ -1114,3 +1172,11 @@ class PowerSpectrumError:
         if reduction is None:
             reduction = self.reduction
         return reduction(self.mean_per_bin)
+
+    def dump(self) -> dict[str, np.ndarray]:
+        """Dump non-reduced metric and aggregate data as numpy array."""
+        raw = self.aggregate.detach().clone().cpu().numpy()
+        mean = self.mean_per_bin.detach().clone().cpu().numpy()
+        std = self.std_per_bin.detach().clone().cpu().numpy()
+        edges = self._k_edges.detach().clone().cpu().numpy()
+        return {"aggregate": raw, "mean_per_bin": mean, "std_per_bin": std, "edges": edges}
