@@ -1050,12 +1050,16 @@ class PowerSpectrumError:
                 torch.log10(torch.tensor(kmax_eff, device=device, dtype=dtype)),
                 steps=self.nbins + 1,
                 base=10.0,
+                device=device,
+                dtype=dtype,
             )
         else:
             edges = torch.linspace(
                 torch.tensor(kmin_eff, device=device, dtype=dtype),
                 torch.tensor(kmax_eff, device=device, dtype=dtype),
                 steps=self.nbins + 1,
+                device=device,
+                dtype=dtype,
             )
 
         # Assign each pixel to a bin: idx in [0, nbins-1], or -1 if out of range
