@@ -261,7 +261,7 @@ def test_RadialProfile(gaussians, show_plots):
     prof.update(gaussians, gaussians_noise)
     assert prof.aggregate.shape[0] == gaussians.shape[0] * 2
     assert prof.aggregate.shape[1] == 100
-    assert prof.aggregate.shape == prof.target_aggregrate.shape
+    assert prof.aggregate.shape == prof.target_aggregate.shape
     profile_summaries = prof.compute()
     assert profile_summaries[0].shape[0] == 100
     assert profile_summaries[0].shape == profile_summaries[1].shape
