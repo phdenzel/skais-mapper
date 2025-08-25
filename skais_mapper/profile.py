@@ -171,13 +171,9 @@ def radial_histogram(
                 dtype=maps.dtype,
             )
         else:
-            bin_edges = torch.linspace(
-                0, r.max(), nbins + 1, device=maps.device, dtype=maps.dtype
-            )
+            bin_edges = torch.linspace(0, r.max(), nbins + 1, device=maps.device, dtype=maps.dtype)
     else:
         nbins = bin_edges.numel() - 1
-    if log_bins:
-        r = torch.log10(r.clamp_min(eps))
     m_flat = maps.reshape(B, -1)
     c_flat = torch.ones_like(m_flat, device=maps.device, dtype=maps.dtype)
     r_flat = r.reshape(B, -1)
@@ -376,18 +372,26 @@ class RadialProfile:
         B, H, W = pred_.shape
         # Compute radial PDFs for both maps using identical binning.
         if self.cumulative:
-            prf_p, edges = radial_cdf(
+            prf_p, edges = cumulative_radial_histogram(
                 pred_, nbins=self.nbins, log_bins=self.log_bins, center_mode=self.center_mode
             )
-            prf_t, _ = radial_cdf(
+            prf_t, _ = cumulative_radial_histogram(
                 targ_, bin_edges=edges[0], log_bins=self.log_bins, center_mode=self.center_mode
             )
         else:
-            prf_p, edges = radial_pdf(
-                pred_, nbins=self.nbins, log_bins=self.log_bins, center_mode=self.center_mode
+            prf_p, edges = radial_histogram(
+                pred_,
+                nbins=self.nbins,
+                log_bins=self.log_bins,
+                center_mode=self.center_mode,
+                average=True,
             )
-            prf_t, _ = radial_pdf(
-                targ_, bin_edges=edges[0], log_bins=self.log_bins, center_mode=self.center_mode
+            prf_t, _ = radial_histogram(
+                targ_,
+                bin_edges=edges[0],
+                log_bins=self.log_bins,
+                center_mode=self.center_mode,
+                average=True,
             )
         if self.edges is None:
             self.edges = edges[0]
