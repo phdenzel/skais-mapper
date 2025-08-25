@@ -375,18 +375,18 @@ class RadialProfile:
             prf_p, edges = cumulative_radial_histogram(
                 pred_, nbins=self.nbins, log_bins=self.log_bins, center_mode=self.center_mode
             )
-            prf_t, _ = cumulative_radial_histogram(
+            prf_t, _, _ = cumulative_radial_histogram(
                 targ_, bin_edges=edges[0], log_bins=self.log_bins, center_mode=self.center_mode
             )
         else:
-            prf_p, edges = radial_histogram(
+            prf_p, edges, _ = radial_histogram(
                 pred_,
                 nbins=self.nbins,
                 log_bins=self.log_bins,
                 center_mode=self.center_mode,
                 average=True,
             )
-            prf_t, _ = radial_histogram(
+            prf_t, _, _ = radial_histogram(
                 targ_,
                 bin_edges=edges[0],
                 log_bins=self.log_bins,
