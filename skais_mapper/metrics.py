@@ -491,6 +491,7 @@ class AsymmetryError:
         self,
         center_mode: Literal["image_center", "centroid"] = "image_center",
         aperture: Literal["full", "r_factor"] = "r_factor",
+        aperture_from: Literal["each", "target", "prediction"] = "each",
         r_factor: float = 1.5,
         eps: float = 1e-12,
         n_observations: int = 0,
@@ -501,7 +502,8 @@ class AsymmetryError:
 
         Args:
             center_mode: Centering mode for rotation; one of `["centroid", "image_center"]`.
-            aperture: Aperture for error calculation; one of `["full" or "r_factor"]`.
+            aperture: Aperture for error calculation; one of `["full", "r_factor"]`.
+            aperture_from: Aperture calculation basis; one of `["each", "target", "prediction"]`.
             r_factor: Multiplier for R50 if `aperture="r_factor"`.
             eps: Numerical stability.
             n_observations: Number of observations seen by the internal state.
@@ -512,15 +514,19 @@ class AsymmetryError:
             raise ValueError("center_mode must be 'image_center' or 'centroid'")
         if aperture not in ("full", "r_factor"):
             raise ValueError("aperture must be 'full' or 'r_factor'")
+        if aperture_from not in ("each", "prediction", "target"):
+            raise ValueError("aperture_from must be 'target', 'prediction', or 'each'")
         self.device = torch.get_default_device() if device is None else device
         self.reduction = reduction
         self.center_mode = center_mode
         self.aperture = aperture
+        self.aperture_from = aperture_from
         self.r_factor = float(r_factor)
         self.eps = float(eps)
         self.n_observations = torch.tensor(n_observations, device=self.device)
         self.aggregate = None
-        self.target_aggregate = None
+        self.map_aggregate = None
+        self._grid = {}
 
     def to(self, device: torch.device):
         """Perform tensor device conversion for all internal tensors.
@@ -530,13 +536,14 @@ class AsymmetryError:
         """
         self.device = device
         self.n_observations = self.n_observations.to(device=self.device)
+        for k in self._grid:
+            XX, YY = self._grid[k]
+            self._grid[k] = (XX.to(device=self.device), YY.to(device=self.device))
         self.aggregate = (
             self.aggregate.to(device=self.device) if self.aggregate is not None else None
         )
-        self.target_aggregate = (
-            self.target_aggregate.to(device=self.device)
-            if self.target_aggregate is not None
-            else None
+        self.map_aggregate = (
+            self.map_aggregate.to(device=self.device) if self.map_aggregate is not None else None
         )
 
     def reset(self, n_observations: int = 0, device: torch.device | None = None) -> None:
@@ -544,10 +551,11 @@ class AsymmetryError:
         self.device = device if device is not None else self.device
         self.n_observations = torch.tensor(n_observations, device=self.device)
         self.aggregate = None
-        self.target_aggregate = None
+        self.map_aggregate = None
+        self._grid = {}
 
     @staticmethod
-    def _rotate_about_center(
+    def _rotate_180_about_center(
         maps: torch.Tensor,
         center: torch.Tensor,
         eps: float = 1e-12,
@@ -585,7 +593,11 @@ class AsymmetryError:
             raise ValueError(f"Input shapes must match, got {targ_.shape} vs {pred_.shape}.")
         B, H, W = pred_.shape
         # Centers
-        XX, YY = _make_grid(W, H, device=targ_.device, dtype=targ_.dtype)
+        if (W, H) in self._grid:
+            XX, YY = self._grid[(W, H)]
+        else:
+            XX, YY = _make_grid(W, H, device=targ_.device, dtype=targ_.dtype)
+            self._grid[(W, H)] = XX, YY
         centers_t = compute_centers(targ_, XX, YY, eps=self.eps, mode=self.center_mode)
         centers_p = compute_centers(pred_, XX, YY, eps=self.eps, mode=self.center_mode)
         # Rotate maps by 180 degrees about their centers
@@ -593,57 +605,83 @@ class AsymmetryError:
             targ_rot = torch.flip(targ_, dims=(-2, -1))
             pred_rot = torch.flip(pred_, dims=(-2, -1))
         elif self.center_mode == "centroid":
-            targ_rot = self._rotate_about_center(targ_, centers_t, eps=self.eps)
-            pred_rot = self._rotate_about_center(pred_, centers_p, eps=self.eps)
+            targ_rot = self._rotate_180_about_center(targ_, centers_t, eps=self.eps)
+            pred_rot = self._rotate_180_about_center(pred_, centers_p, eps=self.eps)
         # Aperture masks
         if self.aperture == "full":
-            mask_p = torch.ones_like(pred_)
             mask_t = torch.ones_like(targ_)
+            mask_p = mask_t
         elif self.aperture == "r_factor":
-            # r_factor * R50 using each map's own center
-            r50_p = half_mass_radius(pred_, eps=self.eps, center_mode=self.center_mode)
-            r50_t = half_mass_radius(targ_, eps=self.eps, center_mode=self.center_mode)
-            r_out_p = (self.r_factor * r50_p).clamp_min(1.0)
-            r_out_t = (self.r_factor * r50_t).clamp_min(1.0)
-            zero = torch.zeros_like(r_out_p)
-            mask_p = _aperture_mask(
-                B, H, W, centers_p, zero, r_out_p, device=targ_.device, dtype=targ_.dtype
-            )
-            mask_t = _aperture_mask(
-                B, H, W, centers_t, zero, r_out_t, device=targ_.device, dtype=targ_.dtype
-            )
+            # r_factor * R50 using the chosen map's COM
+            if self.aperture_from == "target":
+                centers = centers_t
+                r50 = half_mass_radius(targ_, eps=self.eps, center_mode=self.center_mode)
+                r_out = (self.r_factor * r50).clamp_min(1.0)
+                zero = torch.zeros_like(r_out)
+                mask_t = _aperture_mask(
+                    B, H, W, centers, zero, r_out, device=targ_.device, dtype=targ_.dtype
+                )
+                mask_p = mask_t
+            elif self.aperture_from == "prediction":
+                centers = centers_p
+                r50 = half_mass_radius(pred_, eps=self.eps, center_mode=self.center_mode)
+                r_out = (self.r_factor * r50).clamp_min(1.0)
+                zero = torch.zeros_like(r_out)
+                mask_p = _aperture_mask(
+                    B, H, W, centers, zero, r_out, device=pred_.device, dtype=pred_.dtype
+                )
+                mask_t = mask_p
+            else:
+                r50_p = half_mass_radius(pred_, eps=self.eps, center_mode=self.center_mode)
+                r50_t = half_mass_radius(targ_, eps=self.eps, center_mode=self.center_mode)
+                r_out_p = (self.r_factor * r50_p).clamp_min(1.0)
+                r_out_t = (self.r_factor * r50_t).clamp_min(1.0)
+                zero = torch.zeros_like(r_out_t)
+                mask_p = _aperture_mask(
+                    B, H, W, centers_p, zero, r_out_p, device=targ_.device, dtype=targ_.dtype
+                )
+                mask_t = _aperture_mask(
+                    B, H, W, centers_t, zero, r_out_t, device=targ_.device, dtype=targ_.dtype
+                )
         # Asymmetry maps
-        err_p = mask_p * (pred_ - pred_rot).abs()
-        rel_p = (mask_p * pred_.abs()).flatten(1).sum(dim=1)
-        A_p = err_p / rel_p.clamp_min(self.eps).view(B, 1, 1)
-        err_t = mask_t * (targ_ - targ_rot).abs()
-        rel_t = (mask_t * targ_.abs()).flatten(1).sum(dim=1)
-        A_t = err_t / rel_t.clamp_min(self.eps).view(B, 1, 1)
+        resid_p = mask_p * (pred_ - pred_rot).abs()
+        resid_t = mask_t * (targ_ - targ_rot).abs()
+        _norm_p = (mask_p * pred_.abs()).sum(dim=(1, 2)).clamp_min(self.eps).reciprocal()
+        _norm_t = (mask_t * targ_.abs()).sum(dim=(1, 2)).clamp_min(self.eps).reciprocal()
+        A_p = resid_p * _norm_p[:, None, None]
+        A_t = resid_t * _norm_t[:, None, None]
+        A_p_scalar = A_p.sum(dim=(1, 2))
+        A_t_scalar = A_t.sum(dim=(1, 2))
         # Aggregate per sample asymmetries
         if self.aggregate is None:
-            self.aggregate = A_p.sum(dim=0)
+            self.aggregate = (A_p_scalar - A_t_scalar).abs()
         else:
-            self.aggregate += A_p.sum(dim=0)
-        if self.target_aggregate is None:
-            self.target_aggregate = A_t.sum(dim=0)
+            self.aggregate = torch.cat([self.aggregate, (A_p_scalar - A_t_scalar).abs()], dim=0)
+        # Aggregate map asymmetries
+        if self.map_aggregate is None:
+            self.map_aggregate = (A_p - A_t).abs().sum(dim=0)
         else:
-            self.target_aggregate += A_t.sum(dim=0)
+            self.map_aggregate += (A_p - A_t).abs().sum(dim=0)
         self.n_observations += B
 
-    def compute(self, reduction: Callable | None = None) -> torch.Tensor | None:
-        """Return the mean total quantity error over all seen samples."""
+    def compute(self, reduction: Callable | None = None) -> torch.Tensor:
+        """Return the reduced asymmetry error over all seen samples."""
         if reduction is None:
             reduction = self.reduction
         if self.n_observations == 0:
-            return self.aggregate
-        diff = (self.aggregate - self.target_aggregate).abs()
-        return reduction(diff.flatten() / float(self.n_observations))
+            return torch.tensor(0.0, device=self.device)
+        return reduction(self.aggregate)
 
     def dump(self) -> dict[str, np.ndarray]:
         """Dump non-reduced metric components as numpy arrays."""
-        raw = self.aggregate.detach().clone().cpu().numpy() / float(self.n_observations)
-        target = self.target_aggregate.detach().clone().cpu().numpy() / float(self.n_observations)
-        return {"aggregate": raw, "target_aggregate": target}
+        if self.n_observations == 0 or (self.aggregate is None and self.map_aggregate is None):
+            return {}
+        raw = self.aggregate.detach().clone().cpu().numpy()
+        map_ = self.map_aggregate.detach().clone().cpu().numpy() / float(self.n_observations)
+        return {
+            "aggregate": raw,
+            "map_aggregate": map_,
+        }
 
 
 class ClumpinessError:
