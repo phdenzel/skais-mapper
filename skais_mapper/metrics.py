@@ -333,18 +333,18 @@ class RadialProfileCurveError:
         self.n_observations += B
         self.aggregate += torch.sum(per_bin_err, dim=0)
         self.lsq_aggregate += torch.sum(per_bin_err.pow(2), dim=0)
-        self.min_aggregate = torch.min(self.min_aggregate, per_bin_err.amin(dim=0))
-        self.max_aggregate = torch.max(self.max_aggregate, per_bin_err.amax(dim=0))
+        self.min_aggregate = torch.minimum(self.min_aggregate, per_bin_err.amin(dim=0))
+        self.max_aggregate = torch.maximum(self.max_aggregate, per_bin_err.amax(dim=0))
 
     @property
     def mean_per_bin(self) -> torch.Tensor:
         """Mean error per bin."""
-        return self.aggregate / self.n_observations
+        return self.aggregate / max(self.n_observations.item(), 1)
 
     @property
     def var_per_bin(self) -> torch.Tensor:
         """Error variance per bin."""
-        return (self.lsq_aggregate / self.n_observations) - self.mean_per_bin.pow(2)
+        return (self.lsq_aggregate / max(self.n_observations.item(), 1)) - self.mean_per_bin.pow(2)
 
     @property
     def std_per_bin(self) -> torch.Tensor:
@@ -360,6 +360,8 @@ class RadialProfileCurveError:
 
     def dump(self) -> dict[str, np.ndarray]:
         """Dump non-reduced metric and aggregate data as numpy array."""
+        if self.n_observations == 0 or self.aggregate is None or not hasattr(self, "_r_edges"):
+            return {}
         raw = self.aggregate.detach().clone().cpu().numpy()
         mean = self.mean_per_bin.detach().clone().cpu().numpy()
         std = self.std_per_bin.detach().clone().cpu().numpy()
