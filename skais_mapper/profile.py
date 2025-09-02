@@ -324,6 +324,7 @@ class RadialProfile:
             nbins: Number of radial bins.
             center_mode: Centering mode for radial profiles; one of
               `["centroid", "image_center", "fixed"]`.
+            log_bins: Use logarithmic binning.
             cumulative: Whether to compare cumulative radial profiles.
             eps: Numerical stability for divisions.
             device: Tensor allocation/computation device.
@@ -372,7 +373,7 @@ class RadialProfile:
         B, H, W = pred_.shape
         # Compute radial PDFs for both maps using identical binning.
         if self.cumulative:
-            prf_p, edges = cumulative_radial_histogram(
+            prf_p, edges, _ = cumulative_radial_histogram(
                 pred_, nbins=self.nbins, log_bins=self.log_bins, center_mode=self.center_mode
             )
             prf_t, _, _ = cumulative_radial_histogram(
