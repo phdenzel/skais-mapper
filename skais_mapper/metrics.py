@@ -50,7 +50,7 @@ def _aperture_mask(
         B: Batch size.
         H: Mask height.
         W: Mask width.
-        centers: Center coordinates of shape (B, 2) or (B, H, W).
+        centers: Center coordinates of shape (B, 2).
         r_in: Inner radius of shape (B,).
         r_out: Outer radius of shape (B,).
         device: Tensor allocation/computation device.
@@ -144,7 +144,7 @@ class CenterOffsetError:
         maps_ = _sanitize_ndim(maps)
         if X is None or Y is None:
             B, H, W = maps_.shape
-            X, Y = _make_grid(W, H, device=maps.device, dtype=maps.dtype)
+            X, Y = _make_grid(W, H, device=maps_.device, dtype=maps_.dtype)
         return compute_centers(maps_, X, Y, mode="centroid", eps=eps)
 
     @staticmethod
@@ -156,7 +156,10 @@ class CenterOffsetError:
         """
         maps_ = _sanitize_ndim(maps)
         B, H, W = maps_.shape
-        peaks = torch.argmax(maps_, dim=(-2, -1))
+        peak_idcs = torch.argmax(maps_.flatten(1), dim=1)
+        y = peak_idcs // W
+        x = peak_idcs % W
+        peaks = torch.stack([x, y], dim=1)
         return peaks
 
     @staticmethod
@@ -190,16 +193,18 @@ class CenterOffsetError:
             centers_p = self._peak_xy(pred_)
         delta = (centers_p - centers_t) * self.pixel_size
         if self.normalize == "image_radius":
-            denom = self.pixel_size * torch.tensor(
-                [H/2., W/2.], dtype=delta.dtype, device=delta.device
+            img_r = 0.5 * torch.sqrt(
+                torch.tensor(float(H**2 + W**2), device=delta.device, dtype=delta.dtype)
+            )
+            denom = torch.full(
+                (B, 1), self.pixel_size * img_r, device=delta.device, dtype=delta.dtype
             )
         elif self.normalize == "r50":
-            denom = self._half_mass_radius(targ_) * self.pixel_size * torch.ones(
-                2, dtype=delta.dtype, device=delta.device
-            )
+            denom = self._half_mass_radius(targ_) * self.pixel_size
+            denom = denom.view(B, 1)
         else:
-            denom = torch.one(2, dtype=delta.dtype, device=delta.device)
-        delta = delta / denom.view(1, 2).clamp_min(self.eps)
+            denom = torch.ones((B, 1), dtype=delta.dtype, device=delta.device)
+        delta = delta / denom.clamp_min(self.eps)
         if self.aggregate is None:
             self.aggregate = delta
         else:
@@ -209,8 +214,8 @@ class CenterOffsetError:
     @torch.no_grad()
     def compute(self, reduction: Callable | None = None) -> torch.Tensor:
         """Return the center offset error over all seen samples."""
-        if self.n_observations == 0:
-            return self.aggregate
+        if self.n_observations == 0 or self.aggregate is None:
+            return torch.tensor(0., device=self.device)
         dist = self.aggregate.pow(2).sum(dim=1).sqrt()
         if reduction is None:
             reduction = self.reduction
