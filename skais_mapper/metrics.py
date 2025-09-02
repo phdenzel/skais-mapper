@@ -979,7 +979,7 @@ class PowerSpectrumError:
         n_observations: int = 0,
         device: torch.device | None = None,
         dtype: torch.dtype | None = None,
-        reduction: Callable | None = torch.mean,
+        reduction: Callable | None = torch.sum,
     ) -> None:
         """Constructor.
 
@@ -1080,7 +1080,7 @@ class PowerSpectrumError:
     ) -> torch.Tensor:
         """Create a 1D Hann window."""
         device = torch.device(device) if device is not None else torch.device("cpu")
-        dtype = dtype = dtype if dtype is not None else torch.float32
+        dtype = dtype if dtype is not None else torch.float32
         if N <= 1:
             return torch.ones((N,), dtype=dtype, device=device)
         try:
@@ -1112,9 +1112,10 @@ class PowerSpectrumError:
     ) -> None:
         """Prepare frequency grid, bin edges, and pixel-to-bin-assignment."""
         if (
-            (self._H, self._W) == (H, W)
+            self.freeze_edges
             and self._k_edges is not None
             and self._bin_index is not None
+            and (self._W, self._H) == (H, W)
         ):
             return
 
@@ -1172,7 +1173,7 @@ class PowerSpectrumError:
         idx = torch.where(valid, idx, torch.full_like(idx, -1))
 
         # Precompute counts per bin for mean calculation
-        counts = torch.bincount(idx.clamp_min(0), minlength=self.nbins).to(dtype)
+        counts = torch.bincount(idx[idx >= 0], minlength=self.nbins).to(dtype)
         counts = torch.where(counts > 0, counts, torch.ones_like(counts))
 
         # Save caches
@@ -1184,7 +1185,7 @@ class PowerSpectrumError:
 
         # Prepare Hann window if requested
         if self.window == "hann":
-            self._hann2d = self._make_hann2d(H, W, device=device, dtype=dtype)
+            self._hann2d = self._make_hann2d(W, H, device=device, dtype=dtype)
         else:
             self._hann2d = None
 
@@ -1222,7 +1223,7 @@ class PowerSpectrumError:
             raise ValueError(f"Input shapes must match, got {targ_.shape} vs {pred_.shape}.")
         B, H, W = targ_.shape
 
-        self._ensure_kgrid_and_bins(H, W, device=targ_.device, dtype=targ_.dtype)
+        self._ensure_kgrid_and_bins(W, H, device=targ_.device, dtype=targ_.dtype)
 
         # Process each sample in the batch
         for i in range(B):
@@ -1246,15 +1247,21 @@ class PowerSpectrumError:
             if self.log_power:
                 curve_p = torch.log10(curve_p + self.eps)
                 curve_t = torch.log10(curve_t + self.eps)
-            curve_p = curve_p / curve_p.sum().clamp_min(self.eps)
-            curve_t = curve_t / curve_t.sum().clamp_min(self.eps)
+            if self.per_bin_weighted:
+                _norm_p = (curve_p * self._dk).sum().clamp_min(self.eps).reciprocal()
+                _norm_t = (curve_t * self._dk).sum().clamp_min(self.eps).reciprocal()
+            else:
+                _norm_p = curve_p.sum().clamp_min(self.eps).reciprocal()
+                _norm_t = curve_t.sum().clamp_min(self.eps).reciprocal()
+            curve_p = curve_p * _norm_p
+            curve_t = curve_t * _norm_t
             per_bin_err = (curve_p - curve_t).abs()
             if self.per_bin_weighted:
                 per_bin_err = per_bin_err * self._dk
             self.aggregate += per_bin_err
             self.lsq_aggregate += per_bin_err.pow(2)
-            self.min_aggregate = torch.min(self.min_aggregate, per_bin_err.amin())
-            self.max_aggregate = torch.max(self.max_aggregate, per_bin_err.amax())
+            self.min_aggregate = torch.minimum(self.min_aggregate, per_bin_err.amin(dim=0))
+            self.max_aggregate = torch.maximum(self.max_aggregate, per_bin_err.amax(dim=0))
             self.n_observations += 1
 
     @property
@@ -1272,17 +1279,19 @@ class PowerSpectrumError:
     @property
     def std_per_bin(self) -> torch.Tensor:
         """Error variance per bin."""
-        return self.var_per_bin.sqrt() / self.n_observations
+        return self.var_per_bin.sqrt()
 
     @torch.no_grad()
     def compute(self, reduction: Callable | None = None) -> torch.Tensor:
-        """Return the radial profile curve error reduced to a scalar."""
+        """Return the power spectrum curve error reduced to a scalar."""
         if reduction is None:
             reduction = self.reduction
         return reduction(self.mean_per_bin)
 
     def dump(self) -> dict[str, np.ndarray]:
         """Dump non-reduced metric and aggregate data as numpy array."""
+        if self.n_observations == 0:
+            return {}
         raw = self.aggregate.detach().clone().cpu().numpy()
         mean = self.mean_per_bin.detach().clone().cpu().numpy()
         std = self.std_per_bin.detach().clone().cpu().numpy()
