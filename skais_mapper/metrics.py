@@ -458,12 +458,14 @@ class MapTotalError:
 
     def compute(self) -> torch.Tensor:
         """Return the mean total quantity error over all seen samples."""
-        if self.n_observations == 0:
-            return self.aggregate
+        if self.aggregate is None or self.n_observations == 0:
+            return torch.tensor(0.0, device=self.device)
         return self.aggregate.sum() / float(self.n_observations)
 
     def dump(self) -> dict[str, np.ndarray]:
         """Dump non-reduced metric as numpy array."""
+        if self.n_observations == 0 or self.aggregate is None:
+            return {}
         raw = self.aggregate.detach().clone().cpu().numpy()
         targ = self.total_target.detach().clone().cpu().numpy()
         pred = self.total_pred.detach().clone().cpu().numpy()
