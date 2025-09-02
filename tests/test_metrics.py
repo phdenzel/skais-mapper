@@ -346,15 +346,15 @@ def test_MapTotalError_dump(gaussians):
 
 
 @pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch not installed")
-def test_AsymmetryError_rotate_about_center(show_plots):
-    """Test `AsymmetryError.rotate_about_center`."""
+def test_AsymmetryError_rotate_180_about_center(show_plots):
+    """Test `AsymmetryError.rotate_180_about_center`."""
     maps = torch.cat([
         build_triangle_test_tensor(512, 512, invert_center=True) for _ in range(6)
     ], dim=0)
 
     ae = metrics.AsymmetryError()
     center = metrics.CenterOffsetError._com_xy(maps)
-    maps_rot = ae._rotate_about_center(maps, center)
+    maps_rot = ae._rotate_180_about_center(maps, center)
     assert maps.shape[0] == maps_rot.shape[0]
     assert maps.shape[2:] == maps_rot.shape[1:]
     if show_plots:
@@ -377,13 +377,11 @@ def test_AsymmetryError_update(show_plots):
     ae = metrics.AsymmetryError(r_factor=1.5)
     ae.update(maps_noise, maps)
     if show_plots:
-        plt.imshow(ae.aggregate.cpu().numpy())
-        plt.show()
-        plt.imshow(ae.target_aggregate.cpu().numpy())
+        plt.imshow(ae.map_aggregate.cpu().numpy())
         plt.show()
     assert ae.n_observations == maps.shape[0]
-    assert ae.aggregate.shape == maps.shape[2:]
-    assert ae.target_aggregate.shape == maps.shape[2:]
+    assert ae.aggregate.shape[0] == 6
+    assert ae.map_aggregate.shape == maps.shape[2:]
 
 
 @pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch not installed")
@@ -413,7 +411,8 @@ def test_AsymmetryError_dump():
     out = ae.dump()
     assert isinstance(out, dict)
     assert isinstance(out["aggregate"], np.ndarray)
-    assert isinstance(out["target_aggregate"], np.ndarray)
+    assert isinstance(out["map_aggregate"], np.ndarray)
+    assert isinstance(out["map_aggregate"], np.ndarray)
 
 
 @pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch not installed")
@@ -449,13 +448,11 @@ def test_ClumpinessError_update(show_plots):
     ce = metrics.ClumpinessError(sigma_pixels=10)
     ce.update(maps_noise, maps)
     if show_plots:
-        plt.imshow(ce.aggregate.cpu().numpy())
-        plt.show()
-        plt.imshow(ce.target_aggregate.cpu().numpy())
+        plt.imshow(ce.map_aggregate.cpu().numpy())
         plt.show()
     assert ce.n_observations == maps.shape[0]
-    assert ce.aggregate.shape == maps.shape[2:]
-    assert ce.target_aggregate.shape == maps.shape[2:]
+    assert ce.aggregate.shape[0] == 6
+    assert ce.map_aggregate.shape == maps.shape[2:]
 
 
 @pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch not installed")
@@ -491,7 +488,7 @@ def test_ClumpinessError_dump(show_plots):
     out = ce.dump()
     assert isinstance(out, dict)
     assert isinstance(out["aggregate"], np.ndarray)
-    assert isinstance(out["target_aggregate"], np.ndarray)
+    assert isinstance(out["map_aggregate"], np.ndarray)
 
 
 @pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch not installed")
